@@ -2,7 +2,7 @@
 
 Local-first MVP for structuring, auditing, querying, and visually inspecting Daily Drilling Reports and the supplied pressure plots.
 
-The application uses native layout-aware PDF parsing for digital reports, deterministic computer vision for plot evidence, SQLAlchemy/Alembic for normalized storage, safe read-only query controls, and Streamlit for the demonstration UI. It starts without external API keys. Exact dataset results are generated locally in `docs/DATA_AUDIT.md` and `docs/EVALUATION.md`.
+The application uses native layout-aware PDF parsing for digital reports, deterministic computer vision for plot evidence, SQLAlchemy/Alembic for normalized storage, safe read-only query controls, and Streamlit for the demonstration UI. A multilingual local Ollama model performs query analysis and grounded answer formulation; lexical retrieval remains an explicit offline fallback. No proprietary LLM API, billing account, or API key is required. Exact dataset results are generated locally in `docs/DATA_AUDIT.md` and `docs/EVALUATION.md`.
 
 ## Quick start (Windows PowerShell)
 
@@ -16,6 +16,7 @@ python -m venv .venv --system-site-packages
 .\.venv\Scripts\python.exe scripts\backfill_section_tables.py
 .\.venv\Scripts\python.exe scripts\generate_analytics.py
 .\.venv\Scripts\python.exe scripts\evaluate_pipeline.py
+ollama pull qwen2.5:3b-instruct-q4_K_M
 .\.venv\Scripts\python.exe -m streamlit run streamlit_app.py
 ```
 
@@ -30,13 +31,26 @@ Open `http://localhost:8501`. The original source assets are copied byte-for-byt
 .\.venv\Scripts\python.exe -m alembic upgrade head
 ```
 
+## Ollama modes
+
+- Local: the app uses `http://127.0.0.1:11434` and needs no secret.
+- Secure remote: configure an HTTPS Ollama-compatible reverse proxy and keep its bearer token in ignored `.env.local` or Streamlit Secrets.
+- Lexical fallback: the app remains usable and labels every answer as deterministic/not LLM-generated when Ollama or the selected model is unavailable.
+
+The selected language can be Auto, Azərbaycan dili, or English. Azerbaijani questions are rewritten into an English DDR retrieval representation before retrieval, while the original question and technical identifiers are preserved. Deterministic SQL/templates, extracted report sections, and stored plot points remain the factual sources; the LLM is never the source of exact values.
+
+See `docs/OLLAMA.md` and copy `.env.example` to ignored `.env.local` for configuration. The optional persistent multilingual embedding index is built explicitly with `python scripts/build_embedding_index.py`; it is never rebuilt during Streamlit startup.
+
 ## Docker
 
 ```powershell
-docker compose up --build
+docker compose up -d ollama
+docker compose exec ollama ollama pull qwen2.5:3b-instruct-q4_K_M
+docker compose exec ollama ollama pull bge-m3:567m
+docker compose up --build app
 ```
 
-The default Compose service uses SQLite and mounts `./data`. PostgreSQL is available through the optional `postgres` profile; set `DDR_DATABASE_URL` explicitly when using it.
+The default Compose service uses SQLite and mounts `./data`. Ollama has a persistent model volume and no host-published port. Models are pulled only through the deliberate one-time commands above. PostgreSQL is available through the optional `postgres` profile; set `DDR_DATABASE_URL` explicitly when using it.
 
 ## Data and confidence contract
 

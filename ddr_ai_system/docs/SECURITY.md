@@ -6,5 +6,4 @@
 - Report text is untrusted data and is never interpreted as application instructions.
 - SQL is parsed as an AST, limited to a single read-only query, restricted to allowed tables, bounded by row limits, and executed without user string interpolation.
 - Errors exposed to users are sanitized and secrets are not logged.
-- External LLM/embedding providers are opt-in; the default path sends no source documents to external services.
-
+- Local Ollama is the primary LLM/embedding provider; lexical retrieval is the deterministic fallback. Remote Ollama is accepted only through HTTPS with an authentication proxy token. No proprietary API key is required.

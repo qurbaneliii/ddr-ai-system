@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,7 +19,7 @@ from sqlalchemy import func, select
 
 from ddr_ai.assets import render_image_safely
 from ddr_ai.chat import answer_question
-from ddr_ai.config import get_settings
+from ddr_ai.config import Settings, get_settings, streamlit_secret_overrides
 from ddr_ai.db.models import (
     Anomaly,
     EquipmentFailure,
@@ -37,7 +36,7 @@ from ddr_ai.db.models import (
 from ddr_ai.db.session import session_scope, upgrade_schema
 from ddr_ai.ingestion.router import AssetKind, route_asset
 from ddr_ai.ingestion.safe_zip import UnsafeArchiveError, safe_extract_zip
-from ddr_ai.nlp.providers import provider_status
+from ddr_ai.nlp.providers import ProviderSelection, provider_status, select_provider
 from ddr_ai.services.failure_correlations import ensure_failure_correlations
 from ddr_ai.services.processor import process_file
 
@@ -51,7 +50,35 @@ def load_css(path: Path) -> None:
 
 load_css(PROJECT_ROOT / "assets" / "styles.css")
 
-settings = get_settings()
+try:
+    _secret_overrides = streamlit_secret_overrides(st.secrets)
+except Exception:
+    _secret_overrides = {}
+settings = Settings(**_secret_overrides) if _secret_overrides else get_settings()
+settings.ensure_directories()
+
+
+def _provider_fingerprint(config: Settings) -> str:
+    token_present = bool(config.ollama_remote_auth_token.get_secret_value())
+    material = "|".join([
+        config.llm_provider,
+        config.normalized_ollama_base_url,
+        config.ollama_chat_model,
+        config.ollama_embed_model,
+        str(config.ollama_timeout_seconds),
+        str(config.ollama_max_retries),
+        str(token_present),
+    ])
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+@st.cache_resource(show_spinner=False)
+def initialize_provider(_settings: Settings, fingerprint: str) -> ProviderSelection:
+    del fingerprint
+    return select_provider(_settings)
+
+
+provider_selection = initialize_provider(settings, _provider_fingerprint(settings))
 
 
 @st.cache_resource
@@ -111,9 +138,17 @@ def render_chat_message(message: dict[str, Any], message_index: int) -> None:
             return
 
         st.caption(
-            f"Route: {message['route']} · confidence {message['confidence']:.0%} "
-            f"· scope: {message['data_scope']}"
+            f"Provider: {message.get('provider', 'Lexical fallback')} · "
+            f"model: {message.get('model') or 'none'} · route: {message['route']} · "
+            f"language: selected {message.get('selected_language', 'en')} / "
+            f"detected {message.get('detected_language', 'en')} · "
+            f"confidence {message['confidence']:.0%} · scope: {message['data_scope']}"
         )
+        if message.get("fallback_reason"):
+            st.info(f"Fallback reason: {message['fallback_reason']}")
+        if message.get("retrieval_query"):
+            with st.expander("English DDR retrieval representation"):
+                st.write(message["retrieval_query"])
         if message["limitations"]:
             st.warning(" · ".join(message["limitations"]))
         if message["evidence"]:
@@ -137,6 +172,9 @@ def render_chat_message(message: dict[str, Any], message_index: int) -> None:
         if message["sql"]:
             with st.expander("Generated read-only SQL"):
                 st.code(message["sql"], language="sql")
+        if message.get("model_metrics"):
+            with st.expander("Local model metrics"):
+                st.json(message["model_metrics"])
 
 
 PAGES = [
@@ -150,7 +188,8 @@ with st.sidebar:
     page = st.radio("Workspace", PAGES, label_visibility="collapsed")
     st.divider()
     st.caption(f"Parser {settings.parser_version}")
-    st.caption("Local / no-key mode" if not os.getenv("OPENAI_API_KEY") else "Optional provider configured")
+    st.caption(provider_selection.provider.mode_label)
+    st.caption(f"Model: {provider_selection.provider.model or 'none'}")
 
 metrics = counts()
 
@@ -408,6 +447,34 @@ elif page == "Identity / Mapping Review":
 elif page == "Chatbot":
     hero("Grounded chatbot", "Structured SQL, narrative retrieval, plot evidence, and hybrid mapping answers—with route, citations, and limitations exposed.")
     st.caption("Examples: “How many operation rows were marked fail by wellbore?” · “Which wellbores had equipment failures, and what operational activities were being performed?” · “Which profile measurements are below MIN?” · “Are profile Well_15 and pressure_time_plot_15 related?”")
+    controls, status_column = st.columns([1, 2])
+    with controls:
+        language_selection = st.selectbox(
+            "Answer language",
+            ["Auto", "Azərbaycan dili", "English"],
+            key="chat_language",
+        )
+    with status_column:
+        status = provider_status(settings, selection=provider_selection)
+        st.markdown(
+            f"**Active provider:** {status['active_label']}  \n"
+            f"**Model:** {status['model'] or 'none'}  \n"
+            f"**Ollama connection:** {'ready' if status['ollama_reachable'] else 'unreachable'}"
+        )
+        if status["fallback_reason"]:
+            st.warning(f"Fallback is active: {status['fallback_reason']}")
+    with st.expander("Ollama configuration help"):
+        st.code(
+            "ollama serve\n"
+            "ollama pull qwen2.5:3b-instruct-q4_K_M\n"
+            "python -m streamlit run streamlit_app.py",
+            language="powershell",
+        )
+        st.caption(
+            "Localhost needs no secret. Streamlit Community Cloud cannot reach Ollama on your "
+            "laptop; public LLM responses require a separately authorized HTTPS endpoint behind "
+            "an authentication proxy."
+        )
     messages = chat_messages()
     for message_index, message in enumerate(messages):
         render_chat_message(message, message_index)
@@ -419,7 +486,12 @@ elif page == "Chatbot":
         render_chat_message(user_message, len(messages) - 1)
 
         with session_scope() as session:
-            response = answer_question(session, question)
+            response = answer_question(
+                session,
+                question,
+                provider=provider_selection.provider,
+                language=language_selection,
+            )
 
         response_data = response.to_dict()
         assistant_message = {
@@ -434,7 +506,7 @@ else:
     hero("System and data quality", "Parser version, database status, processing failures, environment providers, and exact local run guidance.")
     st.json({"database_url": settings.database_url, "parser_version": settings.parser_version,
              "raw_dir": str(settings.raw_dir.resolve()), "processed_dir": str(settings.processed_dir.resolve()),
-             "provider": provider_status(), "counts": metrics})
+             "provider": provider_status(settings, selection=provider_selection), "counts": metrics})
     with session_scope() as session:
         failed = session.scalars(select(SourceDocument).where(SourceDocument.processing_status == "failed")).all()
         jobs = session.scalars(select(ProcessingJob).order_by(ProcessingJob.id.desc()).limit(100)).all()

@@ -5,13 +5,34 @@ services:
       - "8501:8501"
     environment:
       DDR_DATABASE_URL: sqlite:////app/data/processed/ddr_ai.db
+      LLM_PROVIDER: ollama
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:3b-instruct-q4_K_M}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-bge-m3:567m}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-4096}
+      OLLAMA_TEMPERATURE: ${OLLAMA_TEMPERATURE:-0.1}
     volumes:
       - ./data:/app/data
+    networks:
+      - ddr_internal
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health')"]
       interval: 15s
       timeout: 5s
       retries: 10
+
+  ollama:
+    image: ollama/ollama:0.32.0
+    volumes:
+      - ollama_models:/root/.ollama
+    networks:
+      - ddr_internal
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+    # No host port is published: only the app can access raw Ollama on this network.
 
   postgres:
     image: postgres:16-alpine
@@ -24,12 +45,18 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - ddr_internal
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ddr_ai -d ddr_ai"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-volumes:
-  postgres_data:
+networks:
+  ddr_internal:
+    internal: false
 
+volumes:
+  ollama_models:
+  postgres_data:

@@ -18,8 +18,8 @@ def configure_test_database(monkeypatch, tmp_path: Path) -> None:
     get_engine.cache_clear()
 
 
-def test_streamlit_app_starts_without_api_key(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+def test_streamlit_app_starts_with_ollama_fallback(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("LLM_PROVIDER", "lexical")
     configure_test_database(monkeypatch, tmp_path)
     path = Path(__file__).resolve().parents[2] / "streamlit_app.py"
     app = AppTest.from_file(str(path), default_timeout=30).run()
@@ -28,7 +28,7 @@ def test_streamlit_app_starts_without_api_key(monkeypatch, tmp_path: Path) -> No
 
 
 def test_chat_history_survives_page_reruns(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_PROVIDER", "lexical")
     configure_test_database(monkeypatch, tmp_path)
     path = Path(__file__).resolve().parents[2] / "streamlit_app.py"
     app = AppTest.from_file(str(path), default_timeout=30).run()

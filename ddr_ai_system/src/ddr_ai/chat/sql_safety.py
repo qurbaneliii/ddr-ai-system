@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
+from typing import Any, cast
 
+from sqlalchemy import text
+from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import Session
 from sqlglot import exp, parse
 
 
@@ -26,6 +31,7 @@ def validate_select_sql(
     sql: str,
     *,
     allowed_tables: set[str],
+    allowed_columns: dict[str, set[str]] | None = None,
     default_limit: int = 200,
     max_limit: int = 1000,
     dialect: str = "sqlite",
@@ -49,6 +55,27 @@ def validate_select_sql(
     disallowed = tables - {table.casefold() for table in allowed_tables}
     if disallowed:
         raise UnsafeSQLError(f"Table access is not allowed: {', '.join(sorted(disallowed))}")
+    if allowed_columns is not None:
+        normalized_columns = {
+            table.casefold(): {column.casefold() for column in columns}
+            for table, columns in allowed_columns.items()
+        }
+        aliases = {
+            (table.alias or table.name).casefold(): table.name.casefold()
+            for table in statement.find_all(exp.Table)
+        }
+        if any(isinstance(projection, exp.Star) for projection in statement.expressions):
+            raise UnsafeSQLError("Wildcard columns are not allowed in generated SQL")
+        for column in statement.find_all(exp.Column):
+            if isinstance(column.this, exp.Star):
+                raise UnsafeSQLError("Wildcard columns are not allowed in generated SQL")
+            name = column.name.casefold()
+            if column.table:
+                table_name = aliases.get(column.table.casefold(), column.table.casefold())
+                if name not in normalized_columns.get(table_name, set()):
+                    raise UnsafeSQLError(f"Column access is not allowed: {table_name}.{name}")
+            elif not any(name in columns for columns in normalized_columns.values()):
+                raise UnsafeSQLError(f"Column access is not allowed: {name}")
     limit_node = statement.args.get("limit")
     requested = default_limit
     if limit_node is not None:
@@ -59,3 +86,33 @@ def validate_select_sql(
     applied = max(1, min(requested, max_limit))
     statement.set("limit", exp.Limit(expression=exp.Literal.number(applied)))
     return ValidatedSQL(statement.sql(dialect=dialect), tuple(sorted(tables)), applied)
+
+
+def execute_validated_select(
+    session: Session,
+    validated: ValidatedSQL,
+    *,
+    parameters: dict[str, Any] | None = None,
+    timeout_seconds: float = 10,
+) -> list[dict[str, Any]]:
+    """Execute already-validated SQL in SQLite query-only mode with a hard timeout."""
+    connection = session.connection()
+    if connection.dialect.name != "sqlite":
+        raise UnsafeSQLError(
+            "Generated SQL execution is enabled only for the configured SQLite read-only path."
+        )
+    driver_connection = cast(Any, connection.connection.driver_connection)
+    previous_query_only = int(driver_connection.execute("PRAGMA query_only").fetchone()[0])
+    deadline = time.monotonic() + max(timeout_seconds, 0.001)
+    driver_connection.execute("PRAGMA query_only = ON")
+    driver_connection.set_progress_handler(lambda: int(time.monotonic() > deadline), 100)
+    try:
+        result = connection.execute(text(validated.sql), parameters or {})
+        return [dict(row) for row in result.mappings().fetchmany(validated.limit)]
+    except OperationalError as exc:
+        if "interrupted" in str(exc).casefold():
+            raise UnsafeSQLError("Read-only query exceeded its timeout") from None
+        raise UnsafeSQLError("Read-only query execution failed") from exc
+    finally:
+        driver_connection.set_progress_handler(None, 0)
+        driver_connection.execute(f"PRAGMA query_only = {previous_query_only}")

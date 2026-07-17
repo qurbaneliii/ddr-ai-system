@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from ddr_ai.analytics.summaries import build_daily_summary
 from ddr_ai.chat.service import answer_question
 from ddr_ai.chat.sql_safety import validate_select_sql
+from ddr_ai.config import Settings
 from ddr_ai.db.models import (
     Base,
     EquipmentFailure,
@@ -19,7 +20,7 @@ from ddr_ai.db.models import (
     SectionTableRow,
     SourceDocument,
 )
-from ddr_ai.nlp.providers import provider_status
+from ddr_ai.nlp.providers import LexicalFallbackProvider, provider_status
 from ddr_ai.services.failure_correlations import backfill_failure_correlations
 
 
@@ -103,11 +104,37 @@ def test_chat_main_activity_route_is_grounded() -> None:
     assert answer.evidence[0]["file_name"] == "report.pdf"
 
 
-def test_no_api_key_fallback_is_available(monkeypatch) -> None:
-    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-    status = provider_status()
-    assert status["active"] == "deterministic_no_key"
-    assert status["external_calls_enabled"] is False
+def test_ollama_unavailable_fallback_is_explicit() -> None:
+    settings = Settings(llm_provider="lexical", _env_file=None)
+    status = provider_status(settings)
+    assert status["active"] == "lexical_fallback"
+    assert status["active_label"] == "Lexical fallback"
+    assert status["external_proprietary_api_required"] is False
+
+
+def test_azerbaijani_equipment_failure_question_is_grounded() -> None:
+    db = session()
+    document, report = seed(db)
+    seed_failure(db, document, report)
+    answer = answer_question(
+        db,
+        "Hansı quyularda avadanlıq nasazlığı baş verib və nasazlıq zamanı hansı əməliyyat "
+        "aparılırdı? Tarixləri və mənbələri də göstər.",
+        provider=LexicalFallbackProvider("mocked offline mode"),
+        language="Auto",
+    )
+    assert answer.route == "structured_failure_activity"
+    assert answer.detected_language == "az"
+    assert answer.selected_language == "az"
+    assert answer.provider == "Lexical fallback"
+    assert "nasazlığı" in answer.answer
+    assert answer.rows
+    assert {
+        "wellbore", "report_date", "failure_start_time", "failed_equipment",
+        "downtime_minutes", "concurrent_main_activity", "concurrent_sub_activity",
+        "operation_start_time", "operation_end_time", "match_status", "match_confidence",
+        "source_file", "failure_page", "operation_page",
+    }.issubset(answer.rows[0])
 
 
 def test_verified_mapping_is_not_inferred_from_index() -> None:

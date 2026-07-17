@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session
 
 from ddr_ai.analytics.summaries import build_daily_summary
 from ddr_ai.analytics.trends import robust_sparse_trend
+from ddr_ai.chat.grounding import (
+    analyze_question,
+    grounded_verbalize,
+    localize_deterministic_answer,
+)
+from ddr_ai.config import get_settings
 from ddr_ai.db.models import (
     EquipmentFailure,
     FailureOperationMatch,
@@ -24,7 +30,8 @@ from ddr_ai.db.models import (
     ReportSection,
     SourceDocument,
 )
-from ddr_ai.retrieval.lexical import lexical_search
+from ddr_ai.nlp.providers import BaseLLMProvider, LexicalFallbackProvider, OllamaProvider
+from ddr_ai.retrieval.semantic import hybrid_search
 
 
 @dataclass(slots=True)
@@ -39,6 +46,13 @@ class ChatAnswer:
     sql: str | None = None
     rows: list[dict[str, Any]] = field(default_factory=list)
     export_filename: str | None = None
+    provider: str = "Lexical fallback"
+    model: str | None = None
+    detected_language: str = "en"
+    selected_language: str = "en"
+    retrieval_query: str | None = None
+    fallback_reason: str | None = None
+    model_metrics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -72,7 +86,13 @@ def _mapping_answer(session: Session, question: str) -> ChatAnswer | None:
     )
 
 
-def answer_question(session: Session, question: str) -> ChatAnswer:
+def _answer_deterministic(
+    session: Session,
+    question: str,
+    *,
+    retrieval_query: str | None = None,
+    semantic_provider: OllamaProvider | None = None,
+) -> ChatAnswer:
     started = time.perf_counter()
     normalized = " ".join(question.strip().split())
     lower = normalized.casefold()
@@ -128,7 +148,7 @@ def answer_question(session: Session, question: str) -> ChatAnswer:
             "structured_sql", sql=str(statement.compile(compile_kwargs={"literal_binds": False})), rows=rows,
             evidence=rows, limitations=["Fail states are weak anomaly evidence, not validated ground truth."], confidence=1.0,
         )
-    elif "equipment failure" in lower:
+    elif "equipment failure" in lower or ("nasaz" in lower and "avadan" in lower):
         statement = (
             select(
                 EquipmentFailure,
@@ -247,7 +267,7 @@ def answer_question(session: Session, question: str) -> ChatAnswer:
                             "plot_sql", rows=rows, evidence=rows, confidence=0.95,
                             limitations=["These are visual candidates, not confirmed operational anomalies; SoR is undefined."],
                             sql=str(statement.compile(compile_kwargs={"literal_binds": False})))
-    elif "summarize" in lower or "summary" in lower:
+    elif "summarize" in lower or "summary" in lower or "xülas" in lower:
         report_id_match = re.search(r"report\s*(?:id)?\s*#?(\d+)", lower)
         report_id = int(report_id_match.group(1)) if report_id_match else session.scalar(select(Report.id).order_by(Report.period_end.desc()))
         if report_id is None:
@@ -279,14 +299,22 @@ def answer_question(session: Session, question: str) -> ChatAnswer:
             limitations=["Pressure unit is unknown; trend is descriptive and sparse."], confidence=0.9 if trend.get("applicable") else 0.6,
         )
     else:
-        hits = lexical_search(session, normalized, limit=8)
+        settings = get_settings()
+        hits = hybrid_search(
+            session,
+            semantic_provider,
+            settings.cache_dir / "section_embeddings.sqlite",
+            retrieval_query or normalized,
+            limit=8,
+        )
         if hits:
             top = hits[0]
             answer = ChatAnswer(
                 top.text[:1200], "narrative_retrieval",
-                evidence=[{"file_name": hit.file_name, "page_number": hit.page_number,
+                evidence=[{"section_id": hit.section_id, "report_id": hit.report_id,
+                           "file_name": hit.file_name, "page_number": hit.page_number,
                            "section": hit.section_type, "score": hit.score} for hit in hits],
-                limitations=["Lexical local retrieval; no external LLM is configured."], confidence=min(0.9, 0.5 + top.score / 10),
+                limitations=["Lexical local retrieval supplied the factual evidence."], confidence=min(0.9, 0.5 + top.score / 10),
             )
         else:
             answer = ChatAnswer(
@@ -294,4 +322,63 @@ def answer_question(session: Session, question: str) -> ChatAnswer:
                 limitations=["Try a supported structured question or process the source corpus."], confidence=1.0,
             )
     _audit(session, question, answer, started)
+    return answer
+
+
+def answer_question(
+    session: Session,
+    question: str,
+    *,
+    provider: BaseLLMProvider | None = None,
+    language: str = "Auto",
+) -> ChatAnswer:
+    """Route deterministically, retrieve verified facts, then optionally verbalize with Ollama."""
+    active_provider = provider or LexicalFallbackProvider("No reachable Ollama provider was supplied.")
+    analysis = analyze_question(question, language, active_provider)
+    answer = _answer_deterministic(
+        session,
+        question,
+        retrieval_query=analysis.retrieval_query,
+        semantic_provider=(
+            active_provider
+            if isinstance(active_provider, OllamaProvider)
+            and get_settings().ollama_enable_semantic_retrieval
+            else None
+        ),
+    )
+    deterministic_text = localize_deterministic_answer(
+        answer.answer,
+        answer.route,
+        analysis.target_language,
+    )
+    generated_text, result, fallback_reason = grounded_verbalize(
+        active_provider,
+        original_question=question,
+        target_language=analysis.target_language,
+        deterministic_answer=deterministic_text,
+        route=answer.route,
+        rows=answer.rows,
+        evidence=answer.evidence,
+        limitations=answer.limitations,
+    )
+    answer.answer = generated_text
+    answer.detected_language = analysis.detected_language
+    answer.selected_language = analysis.target_language
+    answer.retrieval_query = analysis.retrieval_query
+    if result is not None and fallback_reason is None:
+        answer.provider = active_provider.mode_label
+        answer.model = result.model
+        answer.model_metrics = {
+            "total_duration_ns": result.total_duration_ns,
+            "load_duration_ns": result.load_duration_ns,
+            "prompt_eval_count": result.prompt_eval_count,
+            "eval_count": result.eval_count,
+        }
+    else:
+        answer.provider = "Lexical fallback"
+        answer.model = active_provider.model if isinstance(active_provider, OllamaProvider) else None
+        answer.fallback_reason = fallback_reason or analysis.fallback_reason
+        fallback_limitation = "This answer is deterministic/lexical and was not LLM-generated."
+        if fallback_limitation not in answer.limitations:
+            answer.limitations.append(fallback_limitation)
     return answer

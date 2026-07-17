@@ -31,7 +31,6 @@ dependencies = [
 [project.optional-dependencies]
 ocr = ["rapidocr-onnxruntime>=1.4,<2"]
 postgres = ["psycopg[binary]>=3.2,<4"]
-llm = ["openai>=1.50,<2"]
 dev = [
   "mypy>=1.11,<2",
   "pytest>=8.3,<9",
