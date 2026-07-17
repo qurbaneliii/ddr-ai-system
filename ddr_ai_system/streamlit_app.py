@@ -18,6 +18,7 @@ import plotly.express as px
 import streamlit as st
 from sqlalchemy import func, select
 
+from ddr_ai.assets import render_image_safely
 from ddr_ai.chat import answer_question
 from ddr_ai.config import get_settings
 from ddr_ai.db.models import (
@@ -300,11 +301,19 @@ elif page == "Pressure Profile Explorer":
             plot = st.selectbox("Profile", plots, format_func=lambda item: item.plot_identifier)
             document = session.get(SourceDocument, plot.source_document_id)
             points = session.scalars(select(PlotPoint).where(PlotPoint.plot_id == plot.id).order_by(PlotPoint.point_index)).all()
-            source_path = Path(document.source_path)
             left, right = st.columns(2)
-            left.image(str(source_path), caption=f"Source · {document.file_name}", use_container_width=True)
-            if plot.overlay_path and Path(plot.overlay_path).exists():
-                right.image(plot.overlay_path, caption="Detected plot area, markers, and candidate highlights", use_container_width=True)
+            render_image_safely(
+                left,
+                document.source_path,
+                caption=f"Source · {document.file_name}",
+                asset_label="Source image",
+            )
+            render_image_safely(
+                right,
+                plot.overlay_path,
+                caption="Detected plot area, markers, and candidate highlights",
+                asset_label="Debug overlay",
+            )
             frame = pd.DataFrame([{"point": item.point_index, "pressure_psi": item.x_value, "depth_ft": item.y_value,
                 "band": item.band_classification, "candidate": item.anomaly_candidate,
                 "confidence": item.confidence, **item.reference_values_json} for item in points])
@@ -321,11 +330,19 @@ elif page == "Pressure-Time Explorer":
             plot = st.selectbox("Comparison image", plots, format_func=lambda item: item.plot_identifier)
             document = session.get(SourceDocument, plot.source_document_id)
             points = session.scalars(select(PlotPoint).where(PlotPoint.plot_id == plot.id).order_by(PlotPoint.point_index)).all()
-            source_path = Path(document.source_path)
             left, right = st.columns(2)
-            left.image(str(source_path), caption="Source image", use_container_width=True)
-            if plot.overlay_path and Path(plot.overlay_path).exists():
-                right.image(plot.overlay_path, caption="Overlay · magenta legend exclusion", use_container_width=True)
+            render_image_safely(
+                left,
+                document.source_path,
+                caption="Source image",
+                asset_label="Source image",
+            )
+            render_image_safely(
+                right,
+                plot.overlay_path,
+                caption="Overlay · magenta legend exclusion",
+                asset_label="Debug overlay",
+            )
             frame = pd.DataFrame([{"series": item.series_identifier, "date": item.observed_date,
                 "pressure_unknown_unit": item.y_value, "confidence": item.confidence} for item in points])
             figure = px.scatter(frame, x="date", y="pressure_unknown_unit", color="series", symbol="series")

@@ -9,6 +9,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from ddr_ai.assets import PROJECT_ROOT, SUPPORTED_IMAGE_EXTENSIONS, portable_asset_path
 from ddr_ai.common.hashing import sha256_file
 from ddr_ai.config import get_settings
 from ddr_ai.db.models import (
@@ -36,15 +37,21 @@ def _safe_error(exc: Exception) -> str:
 
 def _source_for_path(session: Session, path: Path, sha256: str, asset_kind: str) -> tuple[SourceDocument, bool]:
     settings = get_settings()
+    stored_path = (
+        portable_asset_path(path)
+        if path.suffix.casefold() in SUPPORTED_IMAGE_EXTENSIONS
+        else str(path.resolve())
+    )
     existing = session.scalar(select(SourceDocument).where(SourceDocument.sha256 == sha256))
     if existing:
+        existing.source_path = stored_path
         unchanged = existing.processing_status == "complete" and existing.parser_version == settings.parser_version
         return existing, unchanged
     media_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
     source = SourceDocument(
         sha256=sha256,
         file_name=path.name,
-        source_path=str(path.resolve()),
+        source_path=stored_path,
         media_type=media_type,
         asset_kind=asset_kind,
         byte_size=path.stat().st_size,
@@ -141,13 +148,15 @@ def _unresolved_mapping(session: Session, source_namespace: str, source_identifi
 
 
 def _persist_plot(session: Session, source: SourceDocument, result: dict[str, Any]) -> None:
+    overlay_path = result.get("overlay_path")
     plot = Plot(
         source_document_id=source.id, plot_type=result["plot_type"],
         plot_identifier=result["plot_identifier"], width=result["width"], height=result["height"],
         plot_bbox_json=result["plot_bbox"], x_axis_label=result["x_axis_label"],
         y_axis_label=result["y_axis_label"], x_unit=result["x_unit"], y_unit=result["y_unit"],
         unit_status=result["unit_status"], calibration_json=result["calibration"],
-        confidence=result["confidence"], overlay_path=result.get("overlay_path"),
+        confidence=result["confidence"],
+        overlay_path=portable_asset_path(overlay_path) if overlay_path else None,
         warnings_json=result["warnings"],
     )
     session.add(plot)
@@ -188,6 +197,9 @@ def _persist_plot(session: Session, source: SourceDocument, result: dict[str, An
 
 def process_file(path: str | Path) -> dict[str, Any]:
     source_path = Path(path)
+    if not source_path.is_absolute():
+        source_path = PROJECT_ROOT / source_path
+    source_path = source_path.resolve()
     settings = get_settings()
     decision = route_asset(source_path)
     digest = sha256_file(source_path)
