@@ -49,6 +49,25 @@ def test_ollama_configuration_and_streamlit_secret_allowlist() -> None:
     assert overrides == {"ollama_base_url": "https://example.test"}
 
 
+def test_streamlit_cloud_uses_ephemeral_writable_database(monkeypatch, tmp_path) -> None:
+    source = tmp_path / "committed.db"
+    source.write_bytes(b"sqlite-fixture")
+    runtime_root = tmp_path / "system-temp"
+    monkeypatch.setenv("STREAMLIT_SHARING_MODE", "true")
+    monkeypatch.setattr("ddr_ai.config.tempfile.gettempdir", lambda: str(runtime_root))
+    configured = Settings(
+        database_url=f"sqlite:///{source.as_posix()}",
+        raw_dir=tmp_path / "raw",
+        processed_dir=tmp_path / "processed",
+        cache_dir=tmp_path / "cache",
+        _env_file=None,
+    )
+    configured.ensure_directories()
+    runtime_database = runtime_root / "ddr_ai_system_runtime" / "committed.db"
+    assert configured.database_url == f"sqlite:///{runtime_database.as_posix()}"
+    assert runtime_database.read_bytes() == b"sqlite-fixture"
+
+
 def test_health_and_available_model_detection(monkeypatch) -> None:
     monkeypatch.setattr(
         "ddr_ai.nlp.providers.urlopen",

@@ -59,6 +59,8 @@ Remote mode is for a separately administered Ollama-compatible server behind an 
 
 For Streamlit Community Cloud, `localhost` refers to the Cloud container, not a developer laptop. Therefore the public app will truthfully use lexical fallback unless a secure remote endpoint is configured and reachable. Running a large Ollama model inside Streamlit Community Cloud is not part of this architecture.
 
+Community Cloud uses an ephemeral writable copy of the committed processed SQLite database because the repository mount may reject WAL sidecar files. This runtime copy is recreated per container and is not durable persistence; the tracked database remains unchanged.
+
 Example `.streamlit/secrets.toml` entries (placeholder only):
 
 ```toml
