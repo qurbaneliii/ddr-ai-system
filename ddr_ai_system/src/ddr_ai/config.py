@@ -6,98 +6,70 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from pydantic import AliasChoices, Field, SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-STREAMLIT_SECRET_KEYS = {
-    "LLM_PROVIDER",
-    "OLLAMA_BASE_URL",
-    "OLLAMA_CHAT_MODEL",
-    "OLLAMA_EMBED_MODEL",
-    "OLLAMA_TIMEOUT_SECONDS",
-    "OLLAMA_MAX_RETRIES",
-    "OLLAMA_NUM_CTX",
-    "OLLAMA_TEMPERATURE",
-    "OLLAMA_REMOTE_AUTH_TOKEN",
-    "OLLAMA_ENABLE_SEMANTIC_RETRIEVAL",
+STREAMLIT_SECRET_FIELDS = {
+    "LLM_PROVIDER": "llm_provider",
+    "OLLAMA_BASE_URL": "ollama_base_url",
+    "OLLAMA_CHAT_MODEL": "ollama_chat_model",
+    "OLLAMA_EMBED_MODEL": "ollama_embed_model",
+    "OLLAMA_TIMEOUT_SECONDS": "ollama_timeout_seconds",
+    "OLLAMA_MAX_RETRIES": "ollama_max_retries",
+    "OLLAMA_NUM_CTX": "ollama_num_ctx",
+    "OLLAMA_TEMPERATURE": "ollama_temperature",
+    "OLLAMA_REMOTE_AUTH_TOKEN": "ollama_remote_auth_token",
+    "OLLAMA_ENABLE_SEMANTIC_RETRIEVAL": "ollama_enable_semantic_retrieval",
 }
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="DDR_",
+        env_prefix="",
         env_file=(PROJECT_ROOT / ".env", PROJECT_ROOT / ".env.local"),
         env_file_encoding="utf-8",
         extra="ignore",
         populate_by_name=True,
     )
 
-    database_url: str = f"sqlite:///{(PROJECT_ROOT / 'data/processed/ddr_ai.db').as_posix()}"
-    raw_dir: Path = PROJECT_ROOT / "data/raw"
-    processed_dir: Path = PROJECT_ROOT / "data/processed"
-    cache_dir: Path = PROJECT_ROOT / "data/cache"
-    log_level: str = "INFO"
-    max_upload_mb: int = Field(default=250, ge=1, le=2000)
-    query_timeout_seconds: int = Field(default=10, ge=1, le=120)
-    default_query_limit: int = Field(default=200, ge=1, le=1000)
-    max_query_limit: int = Field(default=1000, ge=1, le=10000)
-    parser_version: str = "0.1.0"
+    database_url: str = Field(
+        default=f"sqlite:///{(PROJECT_ROOT / 'data/processed/ddr_ai.db').as_posix()}",
+        validation_alias="DDR_DATABASE_URL",
+    )
+    raw_dir: Path = Field(default=PROJECT_ROOT / "data/raw", validation_alias="DDR_RAW_DIR")
+    processed_dir: Path = Field(
+        default=PROJECT_ROOT / "data/processed", validation_alias="DDR_PROCESSED_DIR"
+    )
+    cache_dir: Path = Field(
+        default=PROJECT_ROOT / "data/cache", validation_alias="DDR_CACHE_DIR"
+    )
+    log_level: str = Field(default="INFO", validation_alias="DDR_LOG_LEVEL")
+    max_upload_mb: int = Field(
+        default=250, ge=1, le=2000, validation_alias="DDR_MAX_UPLOAD_MB"
+    )
+    query_timeout_seconds: int = Field(
+        default=10, ge=1, le=120, validation_alias="DDR_QUERY_TIMEOUT_SECONDS"
+    )
+    default_query_limit: int = Field(
+        default=200, ge=1, le=1000, validation_alias="DDR_DEFAULT_QUERY_LIMIT"
+    )
+    max_query_limit: int = Field(
+        default=1000, ge=1, le=10000, validation_alias="DDR_MAX_QUERY_LIMIT"
+    )
+    parser_version: str = Field(default="0.1.0", validation_alias="DDR_PARSER_VERSION")
 
-    llm_provider: str = Field(
-        default="ollama",
-        validation_alias=AliasChoices("LLM_PROVIDER", "DDR_LLM_PROVIDER"),
-    )
-    ollama_base_url: str = Field(
-        default="http://127.0.0.1:11434",
-        validation_alias=AliasChoices("OLLAMA_BASE_URL", "DDR_OLLAMA_BASE_URL"),
-    )
-    ollama_chat_model: str = Field(
-        default="qwen2.5:3b-instruct-q4_K_M",
-        validation_alias=AliasChoices("OLLAMA_CHAT_MODEL", "DDR_OLLAMA_CHAT_MODEL"),
-    )
-    ollama_embed_model: str = Field(
-        default="bge-m3:567m",
-        validation_alias=AliasChoices("OLLAMA_EMBED_MODEL", "DDR_OLLAMA_EMBED_MODEL"),
-    )
-    ollama_timeout_seconds: float = Field(
-        default=120,
-        ge=1,
-        le=600,
-        validation_alias=AliasChoices("OLLAMA_TIMEOUT_SECONDS", "DDR_OLLAMA_TIMEOUT_SECONDS"),
-    )
-    ollama_max_retries: int = Field(
-        default=2,
-        ge=0,
-        le=5,
-        validation_alias=AliasChoices("OLLAMA_MAX_RETRIES", "DDR_OLLAMA_MAX_RETRIES"),
-    )
-    ollama_num_ctx: int = Field(
-        default=4096,
-        ge=1024,
-        le=131072,
-        validation_alias=AliasChoices("OLLAMA_NUM_CTX", "DDR_OLLAMA_NUM_CTX"),
-    )
-    ollama_temperature: float = Field(
-        default=0.1,
-        ge=0,
-        le=2,
-        validation_alias=AliasChoices("OLLAMA_TEMPERATURE", "DDR_OLLAMA_TEMPERATURE"),
-    )
-    ollama_remote_auth_token: SecretStr = Field(
-        default_factory=lambda: SecretStr(""),
-        validation_alias=AliasChoices(
-            "OLLAMA_REMOTE_AUTH_TOKEN", "DDR_OLLAMA_REMOTE_AUTH_TOKEN"
-        ),
-    )
-    ollama_enable_semantic_retrieval: bool = Field(
-        default=False,
-        validation_alias=AliasChoices(
-            "OLLAMA_ENABLE_SEMANTIC_RETRIEVAL",
-            "DDR_OLLAMA_ENABLE_SEMANTIC_RETRIEVAL",
-        ),
-    )
+    llm_provider: str = "ollama"
+    ollama_base_url: str = "http://127.0.0.1:11434"
+    ollama_chat_model: str = "qwen2.5:3b-instruct-q4_K_M"
+    ollama_embed_model: str = "bge-m3:567m"
+    ollama_timeout_seconds: float = Field(default=120, ge=1, le=600)
+    ollama_max_retries: int = Field(default=2, ge=0, le=5)
+    ollama_num_ctx: int = Field(default=4096, ge=1024, le=131072)
+    ollama_temperature: float = Field(default=0.1, ge=0, le=2)
+    ollama_remote_auth_token: SecretStr = Field(default_factory=lambda: SecretStr(""))
+    ollama_enable_semantic_retrieval: bool = False
     ollama_embedding_batch_size: int = Field(default=16, ge=1, le=128)
 
     def ensure_directories(self) -> None:
@@ -130,7 +102,11 @@ class Settings(BaseSettings):
 
 def streamlit_secret_overrides(secrets: Mapping[str, Any]) -> dict[str, Any]:
     """Copy only supported Ollama settings from Streamlit Secrets."""
-    return {key: secrets[key] for key in STREAMLIT_SECRET_KEYS if key in secrets}
+    return {
+        field_name: secrets[secret_name]
+        for secret_name, field_name in STREAMLIT_SECRET_FIELDS.items()
+        if secret_name in secrets
+    }
 
 
 @lru_cache(maxsize=1)

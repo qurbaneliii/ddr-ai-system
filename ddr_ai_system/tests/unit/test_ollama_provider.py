@@ -46,7 +46,7 @@ def test_ollama_configuration_and_streamlit_secret_allowlist() -> None:
     overrides = streamlit_secret_overrides(
         {"OLLAMA_BASE_URL": "https://example.test", "UNRELATED_SECRET": "do-not-copy"}
     )
-    assert overrides == {"OLLAMA_BASE_URL": "https://example.test"}
+    assert overrides == {"ollama_base_url": "https://example.test"}
 
 
 def test_health_and_available_model_detection(monkeypatch) -> None:
