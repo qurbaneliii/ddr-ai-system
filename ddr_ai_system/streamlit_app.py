@@ -23,6 +23,7 @@ from ddr_ai.chat import answer_question
 from ddr_ai.config import get_settings
 from ddr_ai.db.models import (
     Anomaly,
+    EquipmentFailure,
     IdentityMapping,
     Operation,
     Plot,
@@ -33,10 +34,11 @@ from ddr_ai.db.models import (
     SectionTableRow,
     SourceDocument,
 )
-from ddr_ai.db.session import create_schema, session_scope
+from ddr_ai.db.session import session_scope, upgrade_schema
 from ddr_ai.ingestion.router import AssetKind, route_asset
 from ddr_ai.ingestion.safe_zip import UnsafeArchiveError, safe_extract_zip
 from ddr_ai.nlp.providers import provider_status
+from ddr_ai.services.failure_correlations import ensure_failure_correlations
 from ddr_ai.services.processor import process_file
 
 st.set_page_config(page_title="DDR Intelligence", page_icon="⛽", layout="wide")
@@ -50,7 +52,18 @@ def load_css(path: Path) -> None:
 load_css(PROJECT_ROOT / "assets" / "styles.css")
 
 settings = get_settings()
-create_schema()
+
+
+@st.cache_resource
+def initialize_database(database_url: str) -> None:
+    if not database_url:
+        raise RuntimeError("A database URL is required")
+    upgrade_schema()
+    with session_scope() as session:
+        ensure_failure_correlations(session)
+
+
+initialize_database(settings.database_url)
 
 
 @st.cache_data(ttl=10)
@@ -63,6 +76,7 @@ def counts() -> dict[str, int]:
             "plots": session.scalar(select(func.count(Plot.id))) or 0,
             "anomalies": session.scalar(select(func.count(Anomaly.id))) or 0,
             "section_rows": session.scalar(select(func.count(SectionTableRow.id))) or 0,
+            "equipment_failures": session.scalar(select(func.count(EquipmentFailure.id))) or 0,
             "failed": session.scalar(select(func.count(SourceDocument.id)).where(SourceDocument.processing_status == "failed")) or 0,
         }
 
@@ -89,7 +103,7 @@ def chat_messages() -> list[dict[str, Any]]:
     return st.session_state["chat_messages"]
 
 
-def render_chat_message(message: dict[str, Any]) -> None:
+def render_chat_message(message: dict[str, Any], message_index: int) -> None:
     """Render a persisted user or assistant message with its supporting details."""
     with st.chat_message(message["role"]):
         st.write(message["content"])
@@ -110,7 +124,16 @@ def render_chat_message(message: dict[str, Any]) -> None:
                     unsafe_allow_html=True,
                 )
         if message["rows"]:
-            st.dataframe(pd.DataFrame(message["rows"]), hide_index=True, use_container_width=True)
+            frame = pd.DataFrame(message["rows"])
+            st.dataframe(frame.fillna("Not available"), hide_index=True, use_container_width=True)
+            csv_bytes = frame.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "Download complete result CSV",
+                data=csv_bytes,
+                file_name=message.get("export_filename") or "ddr_chat_result.csv",
+                mime="text/csv",
+                key=f"chat_csv_{message_index}",
+            )
         if message["sql"]:
             with st.expander("Generated read-only SQL"):
                 st.code(message["sql"], language="sql")
@@ -384,16 +407,16 @@ elif page == "Identity / Mapping Review":
 
 elif page == "Chatbot":
     hero("Grounded chatbot", "Structured SQL, narrative retrieval, plot evidence, and hybrid mapping answers—with route, citations, and limitations exposed.")
-    st.caption("Examples: “How many operation rows were marked fail by wellbore?” · “Which reports contain equipment failures?” · “Which profile measurements are below MIN?” · “Are profile Well_15 and pressure_time_plot_15 related?”")
+    st.caption("Examples: “How many operation rows were marked fail by wellbore?” · “Which wellbores had equipment failures, and what operational activities were being performed?” · “Which profile measurements are below MIN?” · “Are profile Well_15 and pressure_time_plot_15 related?”")
     messages = chat_messages()
-    for message in messages:
-        render_chat_message(message)
+    for message_index, message in enumerate(messages):
+        render_chat_message(message, message_index)
 
     question = st.chat_input("Ask the processed DDR and plot evidence")
     if question:
         user_message = {"role": "user", "content": question}
         messages.append(user_message)
-        render_chat_message(user_message)
+        render_chat_message(user_message, len(messages) - 1)
 
         with session_scope() as session:
             response = answer_question(session, question)
@@ -405,7 +428,7 @@ elif page == "Chatbot":
             **response_data,
         }
         messages.append(assistant_message)
-        render_chat_message(assistant_message)
+        render_chat_message(assistant_message, len(messages) - 1)
 
 else:
     hero("System and data quality", "Parser version, database status, processing failures, environment providers, and exact local run guidance.")

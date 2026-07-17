@@ -3,22 +3,22 @@ from __future__ import annotations
 import json
 import time
 from collections import Counter
-from pathlib import Path
 from typing import Any
 
 import pdfplumber
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 
 from ddr_ai.common.numbers import normalize_number
+from ddr_ai.config import PROJECT_ROOT
 from ddr_ai.db.models import Report, ReportSection, SectionTableRow, SourceDocument
-from ddr_ai.db.session import create_schema, session_scope
+from ddr_ai.db.session import session_scope, upgrade_schema
 from ddr_ai.document_ai.sections import SECTION_HEADINGS
 from ddr_ai.pdf.parser import dedupe_page, reconstruct_wrapped_cell
 
 OPTIONAL_SECTION_TYPES = set(SECTION_HEADINGS.values()) - {
     "summary_activities", "summary_planned_activities", "operations"
 }
-BACKFILL_VERSION = "0.1.0"
+BACKFILL_VERSION = "0.2.0"
 
 
 def _heading_positions(page: Any) -> list[tuple[float, str]]:
@@ -64,19 +64,15 @@ def _process_document(document_row: SourceDocument, report: Report) -> dict[str,
             )
         ) or 0
         if existing:
-            stored = session.get(SourceDocument, document_row.id)
-            metadata = dict(stored.metadata_json)
-            metadata["section_table_backfill_version"] = BACKFILL_VERSION
-            stored.metadata_json = metadata
-            return {"file": document_row.file_name, "status": "skipped_existing", "rows": existing}
+            session.execute(delete(SectionTableRow).where(
+                SectionTableRow.source_document_id == document_row.id
+            ))
     output_rows: list[dict[str, object]] = []
     carry: str | None = None
     with pdfplumber.open(document_row.source_path) as pdf:
         for page_number, raw_page in enumerate(pdf.pages, start=1):
             page = dedupe_page(raw_page)
             headings = _heading_positions(page)
-            if headings:
-                carry = headings[-1][1]
             found_tables = page.find_tables() or []
             for table_index, table in enumerate(found_tables):
                 section_type = _section_for_table(headings, float(table.bbox[1]), carry)
@@ -101,6 +97,8 @@ def _process_document(document_row: SourceDocument, report: Report) -> dict[str,
                         "bbox": {"x0": float(table.bbox[0]), "top": float(table.bbox[1]),
                                  "x1": float(table.bbox[2]), "bottom": float(table.bbox[3])},
                     })
+            if headings:
+                carry = headings[-1][1]
     with session_scope() as session:
         sections = session.scalars(
             select(ReportSection).where(ReportSection.report_id == report.id)
@@ -125,7 +123,7 @@ def _process_document(document_row: SourceDocument, report: Report) -> dict[str,
 
 
 def main() -> None:
-    create_schema()
+    upgrade_schema()
     with session_scope() as session:
         documents = session.execute(
             select(SourceDocument, Report)
@@ -158,7 +156,7 @@ def main() -> None:
     summary = {"documents": len(documents), "statuses": dict(counts), "rows": total_rows,
                "rows_by_section": dict(sorted(by_section.items())),
                "sentinel_cells_normalized": sentinel_cells}
-    output = Path("data/processed/section_table_summary.json")
+    output = PROJECT_ROOT / "data" / "processed" / "section_table_summary.json"
     output.write_text(json.dumps(summary, indent=2), encoding="utf-8")
     print(json.dumps(summary, indent=2), flush=True)
 

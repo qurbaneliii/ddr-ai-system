@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from ddr_ai.config import get_settings
-from ddr_ai.db.session import create_schema
+from ddr_ai.db.session import upgrade_schema
 from ddr_ai.services.processor import process_paths
 
 
 def main() -> None:
     settings = get_settings()
-    create_schema()
+    upgrade_schema()
     candidates = []
     for pattern, folder in [
         ("15_9_19_A_1980_01_01.pdf", "ddr_pdfs"),
@@ -26,4 +26,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

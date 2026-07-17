@@ -198,7 +198,7 @@ def render_image_safely(
     except (OSError, UnidentifiedImageError, ValueError) as exc:
         LOGGER.warning(
             "Image asset could not be decoded: stored_path=%r resolved_path=%s reason=%s",
-            os.fspath(stored_path),
+            os.fspath(stored_path) if stored_path is not None else None,
             path,
             exc,
             exc_info=True,
@@ -211,7 +211,7 @@ def render_image_safely(
     except Exception as exc:
         LOGGER.warning(
             "Image asset could not be rendered: stored_path=%r resolved_path=%s reason=%s",
-            os.fspath(stored_path),
+            os.fspath(stored_path) if stored_path is not None else None,
             path,
             exc,
             exc_info=True,

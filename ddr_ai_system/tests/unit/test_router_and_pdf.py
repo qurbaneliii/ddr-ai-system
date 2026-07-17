@@ -40,3 +40,32 @@ def test_report_without_operations_and_optional_sections_is_valid(raw_dir: Path)
     assert report.operations == []
     assert not any(item.section_type == "operations" for item in report.sections)
 
+
+def test_equipment_failure_section_without_usable_rows_stays_empty(raw_dir: Path) -> None:
+    path = find_raw(raw_dir, "ddr_pdfs", "15_9_F_12_2007_07_20.pdf")
+    report = parse_ddr_pdf(path)
+    assert any(
+        item.section_type == "equipment_failure_information" for item in report.sections
+    )
+    assert report.equipment_failures == []
+
+
+def test_equipment_failure_rows_have_row_level_provenance(raw_dir: Path) -> None:
+    path = find_raw(raw_dir, "ddr_pdfs", "15_9_F_10_2009_04_12.pdf")
+    report = parse_ddr_pdf(path)
+    assert len(report.equipment_failures) == 1
+    failure = report.equipment_failures[0]
+    assert failure.start_time_raw == "00:00"
+    assert failure.failed_equipment_normalized == "drill floor tube handl syst"
+    assert failure.system_class_normalized == "pipe handling equ syst"
+    assert failure.page_number == 1
+    assert failure.bbox is not None
+    assert failure.start_datetime == report.period_start
+    assert any(item.temporal_status == "midnight_rollover" for item in report.operations)
+
+
+def test_multiple_failures_in_one_report_are_preserved(raw_dir: Path) -> None:
+    path = find_raw(raw_dir, "ddr_pdfs", "15_9_F_10_2009_05_09.pdf")
+    report = parse_ddr_pdf(path)
+    assert len(report.equipment_failures) == 3
+    assert len({item.row_index for item in report.equipment_failures}) == 3

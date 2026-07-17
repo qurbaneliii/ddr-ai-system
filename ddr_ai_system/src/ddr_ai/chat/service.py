@@ -13,6 +13,8 @@ from sqlalchemy.orm import Session
 from ddr_ai.analytics.summaries import build_daily_summary
 from ddr_ai.analytics.trends import robust_sparse_trend
 from ddr_ai.db.models import (
+    EquipmentFailure,
+    FailureOperationMatch,
     IdentityMapping,
     Operation,
     Plot,
@@ -36,6 +38,7 @@ class ChatAnswer:
     confidence: float = 0.0
     sql: str | None = None
     rows: list[dict[str, Any]] = field(default_factory=list)
+    export_filename: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -127,17 +130,108 @@ def answer_question(session: Session, question: str) -> ChatAnswer:
         )
     elif "equipment failure" in lower:
         statement = (
-            select(SourceDocument.file_name, Report.wellbore, Report.period_end, ReportSection.page_number)
-            .join(Report, Report.source_document_id == SourceDocument.id)
-            .join(ReportSection, ReportSection.report_id == Report.id)
-            .where(ReportSection.section_type == "equipment_failure_information")
-            .order_by(Report.period_end)
+            select(
+                EquipmentFailure,
+                FailureOperationMatch,
+                Operation,
+                Report,
+                SourceDocument,
+            )
+            .join(Report, Report.id == EquipmentFailure.report_id)
+            .join(SourceDocument, SourceDocument.id == EquipmentFailure.source_document_id)
+            .join(
+                FailureOperationMatch,
+                FailureOperationMatch.equipment_failure_id == EquipmentFailure.id,
+            )
+            .outerjoin(Operation, Operation.id == FailureOperationMatch.operation_id)
+            .order_by(
+                Report.period_end,
+                SourceDocument.file_name,
+                EquipmentFailure.page_number,
+                EquipmentFailure.table_index,
+                EquipmentFailure.row_index,
+                Operation.row_index,
+            )
         )
-        rows = [{"file_name": row[0], "wellbore": row[1], "period_end": row[2].isoformat() if row[2] else None,
-                 "page_number": row[3]} for row in session.execute(statement)]
-        answer = ChatAnswer(f"Found {len(rows)} reports containing Equipment Failure Information.",
-                            "structured_sql", rows=rows, evidence=rows[:20], confidence=1.0,
-                            sql=str(statement.compile(compile_kwargs={"literal_binds": False})))
+        rows = []
+        evidence = []
+        for failure, match, operation, report, document in session.execute(statement):
+            report_date = report.filename_date or (report.period_end.date() if report.period_end else None)
+            rows.append({
+                "wellbore": report.wellbore,
+                "report_date": report_date.isoformat() if report_date else None,
+                "failure_start_time": failure.start_time_raw,
+                "failure_end_time": failure.end_time_raw,
+                "failed_equipment": failure.failed_equipment_raw,
+                "equipment_system_class": failure.system_class_raw,
+                "downtime_minutes": failure.operational_downtime_minutes,
+                "failure_remark": failure.failure_remark,
+                "concurrent_main_activity": operation.main_activity_normalized if operation else None,
+                "concurrent_sub_activity": operation.sub_activity_normalized if operation else None,
+                "operation_start_time": operation.start_time_raw if operation else None,
+                "operation_end_time": operation.end_time_raw if operation else None,
+                "match_status": match.match_status,
+                "match_confidence": match.match_confidence,
+                "source_file": document.file_name,
+                "failure_page": failure.page_number,
+                "operation_page": operation.page_number if operation else None,
+            })
+            evidence.append({
+                "failure": {
+                    "evidence_id": f"equipment_failure:{failure.id}",
+                    "file_name": document.file_name,
+                    "page_number": failure.page_number,
+                    "section": failure.section_type,
+                    "table_index": failure.table_index,
+                    "row_index": failure.row_index,
+                },
+                "operation": None if operation is None else {
+                    "evidence_id": f"operation:{operation.id}",
+                    "file_name": document.file_name,
+                    "page_number": operation.page_number,
+                    "section": "operations",
+                    "row_index": operation.row_index,
+                },
+                "match_status": match.match_status,
+                "matching_rule": match.matching_rule,
+                "confidence": match.match_confidence,
+            })
+        statuses = func.count(func.distinct(FailureOperationMatch.equipment_failure_id))
+        status_counts = {
+            status: count for status, count in session.execute(
+                select(FailureOperationMatch.match_status, statuses)
+                .group_by(FailureOperationMatch.match_status)
+            )
+        }
+        report_count = session.scalar(select(func.count(ReportSection.id)).where(
+            ReportSection.section_type == "equipment_failure_information"
+        )) or 0
+        populated_reports = session.scalar(select(func.count(func.distinct(EquipmentFailure.report_id)))) or 0
+        failure_count = session.scalar(select(func.count(EquipmentFailure.id))) or 0
+        missing_operation_count = status_counts.get("missing_operation_time", 0)
+        missing_operation_summary = (
+            f"{missing_operation_count} record lacks a valid Operations interval."
+            if missing_operation_count == 1
+            else f"{missing_operation_count} records lack a valid Operations interval."
+        )
+        answer = ChatAnswer(
+            f"Found {failure_count} populated equipment-failure records across {populated_reports} of "
+            f"{report_count} reports containing the section. Concurrent operational activity was "
+            f"established for {status_counts.get('exact', 0) + status_counts.get('overlap', 0)} "
+            f"records; {status_counts.get('ambiguous', 0)} are ambiguous and "
+            f"{status_counts.get('unmatched', 0)} are unmatched. {missing_operation_summary}",
+            "structured_failure_activity",
+            rows=rows,
+            evidence=evidence,
+            confidence=0.97,
+            sql=str(statement.compile(compile_kwargs={"literal_binds": False})),
+            limitations=[
+                "Section presence is not treated as a populated failure record.",
+                "Activities are reported only from same-report temporal matches; missing or ambiguous activity is not inferred.",
+                "The source 'Equipment Repaired' clock is preserved raw but is not treated as a failure end time without supporting semantics.",
+            ],
+            export_filename="equipment_failures_with_operational_activities.csv",
+        )
     elif "below" in lower and "min" in lower and "profile" in lower:
         statement = (
             select(Plot.plot_identifier, PlotPoint.point_index, PlotPoint.x_value, PlotPoint.y_value,

@@ -29,6 +29,7 @@ from ddr_ai.db.session import session_scope
 from ddr_ai.ingestion.router import AssetKind, route_asset
 from ddr_ai.pdf.parser import parse_ddr_pdf
 from ddr_ai.plots import digitize_pressure_profile, digitize_pressure_time
+from ddr_ai.services.failure_correlations import replace_report_correlations
 
 
 def _safe_error(exc: Exception) -> str:
@@ -105,8 +106,17 @@ def _persist_report(session: Session, source: SourceDocument, parsed: Any) -> No
             main_activity_raw=item.main_activity_raw, sub_activity_raw=item.sub_activity_raw,
             main_activity_normalized=item.main_activity_normalized,
             sub_activity_normalized=item.sub_activity_normalized, state_raw=item.state_raw,
-            state_normalized=item.state_normalized, remark=item.remark, confidence=item.confidence,
+            state_normalized=item.state_normalized, remark=item.remark,
+            start_datetime=item.start_datetime, end_datetime=item.end_datetime,
+            temporal_status=item.temporal_status, temporal_ambiguity=item.temporal_ambiguity,
+            raw_values_json=item.raw_values, normalized_values_json=item.normalized_values,
+            bbox_json=None if item.bbox is None else dict(
+                zip(("x0", "top", "x1", "bottom"), item.bbox, strict=True)
+            ),
+            confidence=item.confidence,
         ))
+    session.flush()
+    replace_report_correlations(session, report, parsed.equipment_failures)
     for item in parsed.fields:
         bbox = item.provenance.bbox
         session.add(ExtractedValue(

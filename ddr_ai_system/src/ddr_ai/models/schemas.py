@@ -51,6 +51,41 @@ class OperationExtraction(BaseModel):
     state_raw: str | None = None
     state_normalized: str | None = None
     remark: str | None = None
+    start_datetime: datetime | None = None
+    end_datetime: datetime | None = None
+    temporal_status: str = "unprocessed"
+    temporal_ambiguity: str | None = None
+    raw_values: dict[str, Any] = Field(default_factory=dict)
+    normalized_values: dict[str, Any] = Field(default_factory=dict)
+    bbox: tuple[float, float, float, float] | None = None
+    confidence: float = 1.0
+
+
+class EquipmentFailureExtraction(BaseModel):
+    table_index: int
+    row_index: int
+    page_number: int
+    start_time_raw: str | None = None
+    end_time_raw: str | None = None
+    start_datetime: datetime | None = None
+    end_datetime: datetime | None = None
+    depth_mmd_raw: str | None = None
+    depth_mmd: float | None = None
+    depth_mtvd_raw: str | None = None
+    depth_mtvd: float | None = None
+    failed_equipment_raw: str | None = None
+    failed_equipment_normalized: str | None = None
+    system_class_raw: str | None = None
+    system_class_normalized: str | None = None
+    operational_downtime_raw: str | None = None
+    operational_downtime_minutes: float | None = None
+    equipment_repaired_raw: str | None = None
+    failure_remark: str | None = None
+    temporal_status: str = "unprocessed"
+    temporal_ambiguity: str | None = None
+    raw_values: dict[str, Any] = Field(default_factory=dict)
+    normalized_values: dict[str, Any] = Field(default_factory=dict)
+    bbox: tuple[float, float, float, float] | None = None
     confidence: float = 1.0
 
 
@@ -88,7 +123,7 @@ class ParsedReport(BaseModel):
     excluded_from_default_trends: bool = False
     sections: list[SectionExtraction] = Field(default_factory=list)
     operations: list[OperationExtraction] = Field(default_factory=list)
+    equipment_failures: list[EquipmentFailureExtraction] = Field(default_factory=list)
     fields: list[ExtractedField] = Field(default_factory=list)
     warnings: list[dict[str, Any]] = Field(default_factory=list)
     sentinel_count: int = 0
-

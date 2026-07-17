@@ -114,6 +114,9 @@ class Report(Base):
     document: Mapped[SourceDocument] = relationship(back_populates="report")
     sections: Mapped[list[ReportSection]] = relationship(back_populates="report", cascade="all, delete-orphan")
     operations: Mapped[list[Operation]] = relationship(back_populates="report", cascade="all, delete-orphan")
+    equipment_failures: Mapped[list[EquipmentFailure]] = relationship(
+        back_populates="report", cascade="all, delete-orphan"
+    )
 
 
 class ReportSection(Base):
@@ -155,8 +158,15 @@ class Operation(Base):
     state_raw: Mapped[str | None] = mapped_column(String(64))
     state_normalized: Mapped[str | None] = mapped_column(String(64), index=True)
     remark: Mapped[str | None] = mapped_column(Text)
+    start_datetime: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    end_datetime: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    temporal_status: Mapped[str] = mapped_column(String(64), nullable=False, default="unprocessed")
+    temporal_ambiguity: Mapped[str | None] = mapped_column(Text)
+    raw_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    normalized_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     bbox_json: Mapped[dict[str, float] | None] = mapped_column(JSON)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
+    validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
 
     report: Mapped[Report] = relationship(back_populates="operations")
 
@@ -212,6 +222,80 @@ class SectionTableRow(Base):
     validation_status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="unreviewed"
     )
+
+
+class EquipmentFailure(Base):
+    __tablename__ = "equipment_failures"
+    __table_args__ = (
+        UniqueConstraint(
+            "report_id", "page_number", "table_index", "row_index",
+            name="uq_equipment_failure_source_row",
+        ),
+        Index("ix_equipment_failures_report_start", "report_id", "start_datetime"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    report_id: Mapped[int] = mapped_column(ForeignKey("reports.id"), nullable=False)
+    source_document_id: Mapped[int] = mapped_column(ForeignKey("source_documents.id"), nullable=False)
+    report_section_id: Mapped[int | None] = mapped_column(ForeignKey("report_sections.id"))
+    page_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    section_type: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="equipment_failure_information"
+    )
+    table_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    row_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    start_time_raw: Mapped[str | None] = mapped_column(String(32))
+    end_time_raw: Mapped[str | None] = mapped_column(String(32))
+    start_datetime: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    end_datetime: Mapped[datetime | None] = mapped_column(DateTime)
+    depth_mmd_raw: Mapped[str | None] = mapped_column(String(64))
+    depth_mmd: Mapped[float | None] = mapped_column(Float)
+    depth_mtvd_raw: Mapped[str | None] = mapped_column(String(64))
+    depth_mtvd: Mapped[float | None] = mapped_column(Float)
+    failed_equipment_raw: Mapped[str | None] = mapped_column(String(256))
+    failed_equipment_normalized: Mapped[str | None] = mapped_column(String(256), index=True)
+    system_class_raw: Mapped[str | None] = mapped_column(String(256))
+    system_class_normalized: Mapped[str | None] = mapped_column(String(256), index=True)
+    operational_downtime_raw: Mapped[str | None] = mapped_column(String(64))
+    operational_downtime_minutes: Mapped[float | None] = mapped_column(Float)
+    equipment_repaired_raw: Mapped[str | None] = mapped_column(String(128))
+    failure_remark: Mapped[str | None] = mapped_column(Text)
+    temporal_status: Mapped[str] = mapped_column(String(64), nullable=False, default="unprocessed")
+    temporal_ambiguity: Mapped[str | None] = mapped_column(Text)
+    raw_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    normalized_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    bbox_json: Mapped[dict[str, float] | None] = mapped_column(JSON)
+    confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.9)
+    validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
+
+    report: Mapped[Report] = relationship(back_populates="equipment_failures")
+    matches: Mapped[list[FailureOperationMatch]] = relationship(
+        back_populates="failure", cascade="all, delete-orphan"
+    )
+
+
+class FailureOperationMatch(Base):
+    __tablename__ = "failure_operation_matches"
+    __table_args__ = (
+        UniqueConstraint("equipment_failure_id", "operation_id", name="uq_failure_operation_match"),
+        Index("ix_failure_matches_status", "match_status"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    equipment_failure_id: Mapped[int] = mapped_column(
+        ForeignKey("equipment_failures.id", ondelete="CASCADE"), nullable=False
+    )
+    operation_id: Mapped[int | None] = mapped_column(ForeignKey("operations.id"))
+    match_status: Mapped[str] = mapped_column(String(64), nullable=False)
+    match_confidence: Mapped[float] = mapped_column(Float, nullable=False)
+    matching_rule: Mapped[str] = mapped_column(String(256), nullable=False)
+    time_difference_minutes: Mapped[float | None] = mapped_column(Float)
+    evidence_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    human_validation_status: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="unreviewed"
+    )
+
+    failure: Mapped[EquipmentFailure] = relationship(back_populates="matches")
 
 
 class Plot(Base):

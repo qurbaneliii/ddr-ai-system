@@ -6,7 +6,7 @@ import json
 
 from ddr_ai.analytics.candidates import materialize_operational_candidates
 from ddr_ai.config import get_settings
-from ddr_ai.db.session import create_schema, session_scope
+from ddr_ai.db.session import session_scope, upgrade_schema
 from ddr_ai.services.processor import process_file
 
 
@@ -15,7 +15,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="Optional representative subset limit per asset type")
     args = parser.parse_args()
     settings = get_settings()
-    create_schema()
+    upgrade_schema()
     groups = [
         sorted((settings.raw_dir / "ddr_pdfs").rglob("*.pdf")),
         sorted((settings.raw_dir / "pressure_profiles").rglob("*.png")),

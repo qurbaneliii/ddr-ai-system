@@ -44,3 +44,20 @@ Generated: 2026-07-17T06:12:29.799192+00:00
 These are extraction and candidate-level analytics measurements, not drilling-engineering validation. SoR is unresolved, pressure-time units remain unknown, automated anomalies are not domain-validated, and no cross-namespace mapping is inferred by matching indices.
 
 The database sentinel-record count can exceed the independent source-text occurrence count because the same source page can be represented in both document-level key/value fields and normalized section tables. It is a record count, not a unique-source-occurrence count.
+
+## Equipment-failure / operational-activity reconciliation
+
+Verified against all cited source PDFs on 2026-07-18:
+
+- Reports containing the section heading: 148 across 9 wellbores.
+- Reports containing populated failure rows: 145.
+- Populated failure records: 242.
+- Exact same-report Operations interval matches: 240.
+- Ambiguous or overlap matches: 0.
+- Unmatched failures: 1.
+- Failures with no valid Operations interval: 1.
+- Empty section reports: 3.
+- Source citation pages: 133 on page 1 and 15 on page 2.
+- Source-PDF citation verification failures: 0 across 148 opened PDFs.
+
+The source data records `00:00` for every failure start and `0` downtime for every populated row. Those values are preserved rather than corrected or inferred. The `Equipment Repaired` column also contains `00:00` throughout this corpus; it is retained as a raw value and is not treated as a validated failure-end timestamp.

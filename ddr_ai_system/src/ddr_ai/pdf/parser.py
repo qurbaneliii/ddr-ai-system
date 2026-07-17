@@ -9,10 +9,12 @@ import pdfplumber
 from pypdf import PdfReader
 
 from ddr_ai.analytics.events import normalize_activity
+from ddr_ai.analytics.failure_matching import normalize_failure_time, normalize_operation_interval
 from ddr_ai.common.hashing import sha256_file
 from ddr_ai.common.numbers import normalize_number
 from ddr_ai.document_ai.sections import extract_summary, split_page_sections
 from ddr_ai.models.schemas import (
+    EquipmentFailureExtraction,
     ExtractedField,
     OperationExtraction,
     PageExtraction,
@@ -70,17 +72,40 @@ def operation_duration_hours(start_raw: str | None, end_raw: str | None) -> floa
     return round((end - start).total_seconds() / 3600, 4)
 
 
-def _parse_operation_tables(page_tables: list[list[list[list[str | None]]]]) -> list[OperationExtraction]:
+def _normalized_headers(row: list[str | None]) -> set[str]:
+    return {
+        re.sub(r"[^a-z0-9]+", "", (reconstruct_wrapped_cell(cell) or "").casefold())
+        for cell in row
+    }
+
+
+def is_equipment_failure_header(row: list[str | None]) -> bool:
+    headers = _normalized_headers(row)
+    return "starttime" in headers and "operationdowntimemin" in headers and "remark" in headers
+
+
+def _row_bbox(table: Any, row_number: int) -> tuple[float, float, float, float] | None:
+    rows = getattr(table, "rows", None)
+    if not rows or row_number >= len(rows):
+        return None
+    bbox = getattr(rows[row_number], "bbox", None)
+    if not bbox or len(bbox) != 4:
+        return None
+    return (float(bbox[0]), float(bbox[1]), float(bbox[2]), float(bbox[3]))
+
+
+def _parse_operation_tables(page_tables: list[list[Any]]) -> list[OperationExtraction]:
     operations: list[OperationExtraction] = []
     row_index = 0
     for page_number, tables in enumerate(page_tables, start=1):
-        for table in tables:
-            if not table:
+        for table_index, table in enumerate(tables):
+            data = table.extract() or []
+            if not data:
                 continue
-            header = " ".join(str(cell or "") for cell in table[0]).casefold()
+            header = " ".join(str(cell or "") for cell in data[0]).casefold()
             if not all(token in header for token in ("start", "end", "state", "remark")):
                 continue
-            for row in table[1:]:
+            for table_row_index, row in enumerate(data[1:], start=1):
                 padded = list(row) + [None] * max(0, 6 - len(row))
                 start_raw = reconstruct_wrapped_cell(padded[0], compact=True)
                 end_raw = reconstruct_wrapped_cell(padded[1], compact=True)
@@ -110,10 +135,108 @@ def _parse_operation_tables(page_tables: list[list[list[list[str | None]]]]) -> 
                     state_raw=state_raw,
                     state_normalized=state_normalized,
                     remark=reconstruct_wrapped_cell(padded[5]),
+                    raw_values={
+                        "table_index": table_index,
+                        "table_row_index": table_row_index,
+                        "start_time": start_raw,
+                        "end_time": end_raw,
+                        "end_depth_mmd": depth.raw_value,
+                        "main_sub_activity": activity or None,
+                        "state": state_raw,
+                        "remark": reconstruct_wrapped_cell(padded[5]),
+                    },
+                    normalized_values={
+                        "end_depth_mmd": depth.value,
+                        "main_activity": main_normalized,
+                        "sub_activity": sub_normalized,
+                        "state": state_normalized,
+                    },
+                    bbox=_row_bbox(table, table_row_index),
                     confidence=0.98,
                 ))
                 row_index += 1
     return operations
+
+
+def _parse_equipment_failure_tables(page_tables: list[list[Any]]) -> list[EquipmentFailureExtraction]:
+    failures: list[EquipmentFailureExtraction] = []
+    for page_number, tables in enumerate(page_tables, start=1):
+        for table_index, table in enumerate(tables):
+            data = table.extract() or []
+            if not data or not is_equipment_failure_header(data[0]):
+                continue
+            headers = [reconstruct_wrapped_cell(cell) for cell in data[0]]
+            for row_index, row in enumerate(data[1:], start=1):
+                failure = equipment_failure_from_cells(
+                    headers,
+                    row,
+                    table_index=table_index,
+                    row_index=row_index,
+                    page_number=page_number,
+                    bbox=_row_bbox(table, row_index),
+                )
+                if failure:
+                    failures.append(failure)
+    return failures
+
+
+def equipment_failure_from_cells(
+    headers: list[str | None],
+    row: list[str | None],
+    *,
+    table_index: int,
+    row_index: int,
+    page_number: int,
+    bbox: tuple[float, float, float, float] | None = None,
+) -> EquipmentFailureExtraction | None:
+    """Map only a validated Equipment Failure Information table row."""
+    if not is_equipment_failure_header(headers):
+        return None
+    padded = list(row) + [None] * max(0, 7 - len(row))
+    cells = [reconstruct_wrapped_cell(cell) for cell in padded[:7]]
+    if not any(cells):
+        return None
+    start_raw, depth_mmd_raw, depth_mtvd_raw, equipment_class_raw, downtime_raw, repaired_raw, remark = cells
+    if not any((start_raw, equipment_class_raw, remark)):
+        return None
+    equipment_parts = re.split(r"\s*--\s*", equipment_class_raw or "", maxsplit=1)
+    system_class = equipment_parts[0].strip() or None
+    failed_equipment = equipment_parts[1].strip() if len(equipment_parts) > 1 else None
+    depth_mmd = normalize_number(depth_mmd_raw)
+    depth_mtvd = normalize_number(depth_mtvd_raw)
+    downtime = normalize_number(downtime_raw)
+    normalized_headers = [
+        reconstruct_wrapped_cell(cell) or f"column_{index}"
+        for index, cell in enumerate(headers)
+    ]
+    return EquipmentFailureExtraction(
+        table_index=table_index,
+        row_index=row_index,
+        page_number=page_number,
+        start_time_raw=start_raw,
+        depth_mmd_raw=depth_mmd.raw_value,
+        depth_mmd=depth_mmd.value,
+        depth_mtvd_raw=depth_mtvd.raw_value,
+        depth_mtvd=depth_mtvd.value,
+        failed_equipment_raw=failed_equipment,
+        failed_equipment_normalized=failed_equipment.casefold() if failed_equipment else None,
+        system_class_raw=system_class,
+        system_class_normalized=system_class.casefold() if system_class else None,
+        operational_downtime_raw=downtime.raw_value,
+        operational_downtime_minutes=downtime.value,
+        equipment_repaired_raw=repaired_raw,
+        failure_remark=remark,
+        raw_values=dict(zip(normalized_headers, cells, strict=False)),
+        normalized_values={
+            "depth_mmd": depth_mmd.value,
+            "depth_mtvd": depth_mtvd.value,
+            "failed_equipment": failed_equipment.casefold() if failed_equipment else None,
+            "system_class": system_class.casefold() if system_class else None,
+            "operational_downtime_minutes": downtime.value,
+        },
+        bbox=bbox,
+        confidence=0.97,
+    )
 
 
 def _header_fields(tables: list[list[list[str | None]]], source_path: str) -> list[ExtractedField]:
@@ -155,13 +278,14 @@ def parse_ddr_pdf(path: str | Path) -> ParsedReport:
     pages: list[PageExtraction] = []
     sections: list[SectionExtraction] = []
     page_texts: list[str] = []
-    page_tables: list[list[list[list[str | None]]]] = []
+    page_tables: list[list[Any]] = []
     with pdfplumber.open(source) as document:
         for page_number, raw_page in enumerate(document.pages, start=1):
             page = dedupe_page(raw_page)
             text = page.extract_text(x_tolerance=2, y_tolerance=3) or ""
-            tables = page.extract_tables() or []
-            page_tables.append(tables)
+            found_tables = page.find_tables() or []
+            tables = [table.extract() or [] for table in found_tables]
+            page_tables.append(found_tables)
             pages.append(PageExtraction(
                 page_number=page_number,
                 width=float(page.width),
@@ -180,7 +304,9 @@ def parse_ddr_pdf(path: str | Path) -> ParsedReport:
                     text=str(entry["text"]),
                 ))
         operations = _parse_operation_tables(page_tables)
-        fields = _header_fields(page_tables[0], str(source)) if page_tables else []
+        equipment_failures = _parse_equipment_failure_tables(page_tables)
+        first_page_tables = [table.extract() or [] for table in page_tables[0]] if page_tables else []
+        fields = _header_fields(first_page_tables, str(source)) if page_tables else []
 
     full_text = "\n".join(page_texts)
     first_text = page_texts[0] if page_texts else ""
@@ -193,6 +319,28 @@ def parse_ddr_pdf(path: str | Path) -> ParsedReport:
         wellbore = canonicalize_wellbore(period_match.group("wellbore"))
         period_start = _parse_datetime(period_match.group("start"))
         period_end = _parse_datetime(period_match.group("end"))
+    for operation in operations:
+        start, end, status, ambiguity = normalize_operation_interval(
+            operation.start_time_raw, operation.end_time_raw, period_start
+        )
+        operation.start_datetime = start
+        operation.end_datetime = end
+        operation.temporal_status = status
+        operation.temporal_ambiguity = ambiguity
+        operation.normalized_values.update({
+            "start_datetime": start.isoformat() if start else None,
+            "end_datetime": end.isoformat() if end else None,
+            "temporal_status": status,
+        })
+    for failure in equipment_failures:
+        start, status, ambiguity = normalize_failure_time(failure.start_time_raw, period_start)
+        failure.start_datetime = start
+        failure.temporal_status = status
+        failure.temporal_ambiguity = ambiguity
+        failure.normalized_values.update({
+            "start_datetime": start.isoformat() if start else None,
+            "temporal_status": status,
+        })
     status_match = STATUS_RE.search(first_text)
     report_match = REPORT_NUMBER_RE.search(first_text)
     spud_match = SPUD_RE.search(first_text)
@@ -241,6 +389,7 @@ def parse_ddr_pdf(path: str | Path) -> ParsedReport:
         excluded_from_default_trends=excluded,
         sections=sections,
         operations=operations,
+        equipment_failures=equipment_failures,
         fields=fields,
         warnings=warnings,
         sentinel_count=len(SENTINEL_RE.findall(full_text)),
