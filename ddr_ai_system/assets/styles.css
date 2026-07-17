@@ -1,0 +1,164 @@
+:root {
+  --ddr-ink: #11212c;
+  --ddr-muted: #52616b;
+  --ddr-accent: #0b7a75;
+  --ddr-accent-strong: #075e5a;
+  --ddr-amber: #8a5700;
+  --ddr-surface: #ffffff;
+  --ddr-surface-subtle: #eef4f2;
+  --ddr-user-surface: #dcefea;
+  --ddr-border: #6b7f7a;
+}
+
+.stApp {
+  background: linear-gradient(135deg, #f6f8f8 0%, #eef4f2 100%);
+  color: var(--ddr-ink);
+}
+
+.hero {
+  padding: 1.4rem 1.6rem;
+  border-radius: 18px;
+  background: linear-gradient(120deg, #10252c, #0b7a75);
+  color: #ffffff;
+  box-shadow: 0 12px 35px rgba(16, 37, 44, 0.18);
+  margin-bottom: 1.2rem;
+}
+
+.hero h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.hero p {
+  margin: 0.45rem 0 0;
+  color: #d8ebe7;
+}
+
+[data-testid="stMetric"] {
+  background: var(--ddr-surface);
+  border: 1px solid #b7c7c3;
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.notice {
+  padding: 0.9rem 1rem;
+  border-left: 4px solid var(--ddr-amber);
+  background: #fff4d6;
+  color: #3d2b00;
+  border-radius: 8px;
+}
+
+.citation {
+  border: 1px solid #9aaba7;
+  background: var(--ddr-surface);
+  color: var(--ddr-ink);
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+  margin: 0.35rem 0;
+  overflow-wrap: anywhere;
+}
+
+/* Streamlit 1.59 chat input. Keep every override inside the component. */
+[data-testid="stChatInput"] > div {
+  background-color: var(--ddr-surface) !important;
+  border: 1px solid var(--ddr-border) !important;
+  box-shadow: 0 1px 3px rgba(16, 37, 44, 0.12);
+}
+
+[data-testid="stChatInput"] > div:focus-within {
+  border-color: var(--ddr-accent) !important;
+  box-shadow: 0 0 0 3px rgba(11, 122, 117, 0.2);
+}
+
+[data-testid="stChatInput"] textarea {
+  color: var(--ddr-ink) !important;
+  background-color: var(--ddr-surface) !important;
+  caret-color: var(--ddr-accent-strong) !important;
+  -webkit-text-fill-color: var(--ddr-ink) !important;
+  opacity: 1 !important;
+}
+
+[data-testid="stChatInput"] textarea::placeholder {
+  color: var(--ddr-muted) !important;
+  opacity: 1 !important;
+  -webkit-text-fill-color: var(--ddr-muted) !important;
+}
+
+[data-testid="stChatInput"] textarea:disabled {
+  color: #61716d !important;
+  background-color: var(--ddr-surface-subtle) !important;
+  -webkit-text-fill-color: #61716d !important;
+}
+
+[data-testid="stChatInput"] button {
+  color: var(--ddr-accent-strong) !important;
+}
+
+[data-testid="stChatInput"] button:hover:not(:disabled) {
+  background-color: #d7ebe7 !important;
+}
+
+[data-testid="stChatInput"] button:focus-visible {
+  outline: 3px solid rgba(11, 122, 117, 0.35);
+  outline-offset: 2px;
+}
+
+[data-testid="stChatInput"] button:disabled {
+  color: #71817d !important;
+  opacity: 0.7 !important;
+}
+
+/* Scope message typography so tables, charts, and unrelated widgets retain theme styles. */
+[data-testid="stChatMessage"] {
+  border: 1px solid #9aaba7;
+  border-radius: 14px;
+  background: var(--ddr-surface);
+  color: var(--ddr-ink);
+  padding: 0.9rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarUser"]) {
+  background: var(--ddr-user-surface);
+  border-color: #7ca69d;
+}
+
+[data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatarAssistant"]) {
+  background: var(--ddr-surface);
+  border-color: #9aaba7;
+}
+
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"]
+  :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, th, td) {
+  color: var(--ddr-ink);
+}
+
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"] a {
+  color: var(--ddr-accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"] :not(pre) > code {
+  color: #10252c;
+  background: #dbe8e5;
+  border: 1px solid #a8bbb6;
+  border-radius: 4px;
+  padding: 0.08em 0.28em;
+}
+
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"] pre {
+  color: #f8fafc;
+  background: #10252c;
+  border: 1px solid #31505a;
+}
+
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"] table {
+  background: var(--ddr-surface);
+  border-color: #9aaba7;
+}
+
+[data-testid="stChatMessage"] [data-testid="stChatMessageContent"] th {
+  background: #dbe8e5;
+}

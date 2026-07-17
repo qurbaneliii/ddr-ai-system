@@ -6,6 +6,7 @@ import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 SRC_DIR = PROJECT_ROOT / "src"
@@ -38,24 +39,14 @@ from ddr_ai.nlp.providers import provider_status
 from ddr_ai.services.processor import process_file
 
 st.set_page_config(page_title="DDR Intelligence", page_icon="⛽", layout="wide")
-st.markdown(
-    """
-    <style>
-      :root { --ink:#11212c; --muted:#65717a; --accent:#0b7a75; --amber:#d68c1f; }
-      .stApp { background: linear-gradient(135deg,#f6f8f8 0%,#eef4f2 100%); color:var(--ink); }
-      [data-testid="stSidebar"] { background:#10252c; }
-      [data-testid="stSidebar"] * { color:#ecf6f4 !important; }
-      .hero { padding:1.4rem 1.6rem; border-radius:18px; background:linear-gradient(120deg,#10252c,#0b7a75);
-              color:white; box-shadow:0 12px 35px rgba(16,37,44,.18); margin-bottom:1.2rem; }
-      .hero h1 { margin:0; font-size:2rem; }
-      .hero p { margin:.45rem 0 0; color:#d8ebe7; }
-      [data-testid="stMetric"] { background:white; border:1px solid #dce7e4; padding:14px; border-radius:14px; }
-      .notice { padding:.9rem 1rem; border-left:4px solid var(--amber); background:#fff8ea; border-radius:8px; }
-      .citation { border:1px solid #dce7e4; background:white; border-radius:10px; padding:.65rem .8rem; margin:.35rem 0; }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+
+
+def load_css(path: Path) -> None:
+    """Load the app stylesheet from a path anchored to this source file."""
+    st.markdown(f"<style>{path.read_text(encoding='utf-8')}</style>", unsafe_allow_html=True)
+
+
+load_css(PROJECT_ROOT / "assets" / "styles.css")
 
 settings = get_settings()
 create_schema()
@@ -81,6 +72,47 @@ def hero(title: str, subtitle: str) -> None:
 
 def empty_state() -> None:
     st.info("The database is empty. Run `python scripts/process_all.py` after the safe input bootstrap, or use Upload & Processing.")
+
+
+def chat_messages() -> list[dict[str, Any]]:
+    """Return the single, validated message list used across Streamlit reruns."""
+    messages = st.session_state.get("chat_messages")
+    valid = isinstance(messages, list) and all(
+        isinstance(message, dict)
+        and message.get("role") in {"user", "assistant"}
+        and isinstance(message.get("content"), str)
+        for message in messages
+    )
+    if not valid:
+        st.session_state["chat_messages"] = []
+    return st.session_state["chat_messages"]
+
+
+def render_chat_message(message: dict[str, Any]) -> None:
+    """Render a persisted user or assistant message with its supporting details."""
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+        if message["role"] == "user":
+            return
+
+        st.caption(
+            f"Route: {message['route']} · confidence {message['confidence']:.0%} "
+            f"· scope: {message['data_scope']}"
+        )
+        if message["limitations"]:
+            st.warning(" · ".join(message["limitations"]))
+        if message["evidence"]:
+            st.markdown("#### Evidence")
+            for item in message["evidence"][:20]:
+                st.markdown(
+                    f'<div class="citation">{json.dumps(item, ensure_ascii=False, default=str)}</div>',
+                    unsafe_allow_html=True,
+                )
+        if message["rows"]:
+            st.dataframe(pd.DataFrame(message["rows"]), hide_index=True, use_container_width=True)
+        if message["sql"]:
+            with st.expander("Generated read-only SQL"):
+                st.code(message["sql"], language="sql")
 
 
 PAGES = [
@@ -336,26 +368,27 @@ elif page == "Identity / Mapping Review":
 elif page == "Chatbot":
     hero("Grounded chatbot", "Structured SQL, narrative retrieval, plot evidence, and hybrid mapping answers—with route, citations, and limitations exposed.")
     st.caption("Examples: “How many operation rows were marked fail by wellbore?” · “Which reports contain equipment failures?” · “Which profile measurements are below MIN?” · “Are profile Well_15 and pressure_time_plot_15 related?”")
+    messages = chat_messages()
+    for message in messages:
+        render_chat_message(message)
+
     question = st.chat_input("Ask the processed DDR and plot evidence")
     if question:
-        with st.chat_message("user"):
-            st.write(question)
+        user_message = {"role": "user", "content": question}
+        messages.append(user_message)
+        render_chat_message(user_message)
+
         with session_scope() as session:
             response = answer_question(session, question)
-        with st.chat_message("assistant"):
-            st.write(response.answer)
-            st.caption(f"Route: {response.route} · confidence {response.confidence:.0%} · scope: {response.data_scope}")
-            if response.limitations:
-                st.warning(" · ".join(response.limitations))
-            if response.evidence:
-                st.markdown("#### Evidence")
-                for item in response.evidence[:20]:
-                    st.markdown(f'<div class="citation">{json.dumps(item, ensure_ascii=False, default=str)}</div>', unsafe_allow_html=True)
-            if response.rows:
-                st.dataframe(pd.DataFrame(response.rows), hide_index=True, use_container_width=True)
-            if response.sql:
-                with st.expander("Generated read-only SQL"):
-                    st.code(response.sql, language="sql")
+
+        response_data = response.to_dict()
+        assistant_message = {
+            "role": "assistant",
+            "content": response_data.pop("answer"),
+            **response_data,
+        }
+        messages.append(assistant_message)
+        render_chat_message(assistant_message)
 
 else:
     hero("System and data quality", "Parser version, database status, processing failures, environment providers, and exact local run guidance.")
