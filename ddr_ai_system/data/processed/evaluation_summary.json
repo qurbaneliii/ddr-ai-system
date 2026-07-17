@@ -1,0 +1,148 @@
+{
+  "generated_at": "2026-07-17T06:12:29.799192+00:00",
+  "processing": {
+    "statuses": {
+      "complete": 1060
+    },
+    "routes": {
+      "digital_pdf": 1000,
+      "pressure_profile": 30,
+      "pressure_time": 30
+    },
+    "job_duration_seconds": 3821.274,
+    "failed_files": []
+  },
+  "ddr": {
+    "reports": 1000,
+    "operations": 10983,
+    "fail_operation_rows": 480,
+    "pdfs_with_fail_rows": 145,
+    "equipment_failure_reports": 148,
+    "excluded_from_default_trends": 45,
+    "optional_section_table_rows": 52204,
+    "optional_rows_by_section": {
+      "bit_record": 344,
+      "casing_liner_tubing": 865,
+      "core_information": 15,
+      "drilling_fluid": 40276,
+      "equipment_failure_information": 1183,
+      "gas_reading_information": 1003,
+      "lithology_information": 797,
+      "log_information": 269,
+      "perforation_information": 336,
+      "pore_pressure": 5286,
+      "stratigraphic_information": 280,
+      "survey_station": 1547,
+      "welltest_information": 3
+    },
+    "independent_text_sentinel_occurrences": 4025,
+    "normalized_sentinel_records": 5374,
+    "normalized_optional_section_sentinel_cells": 3511
+  },
+  "pressure_profiles": {
+    "plots": 30,
+    "points": 300,
+    "points_per_plot": {
+      "Well_01": 10,
+      "Well_02": 10,
+      "Well_03": 10,
+      "Well_04": 10,
+      "Well_05": 10,
+      "Well_06": 10,
+      "Well_07": 10,
+      "Well_08": 10,
+      "Well_09": 10,
+      "Well_10": 10,
+      "Well_11": 10,
+      "Well_12": 10,
+      "Well_13": 10,
+      "Well_14": 10,
+      "Well_15": 10,
+      "Well_16": 10,
+      "Well_17": 10,
+      "Well_18": 10,
+      "Well_19": 10,
+      "Well_20": 10,
+      "Well_21": 10,
+      "Well_22": 10,
+      "Well_23": 10,
+      "Well_24": 10,
+      "Well_25": 10,
+      "Well_26": 10,
+      "Well_27": 10,
+      "Well_28": 10,
+      "Well_29": 10,
+      "Well_30": 10
+    },
+    "band_classifications": {
+      "above_virgin": 1,
+      "below_min": 7,
+      "between_base_max": 150,
+      "between_min_base": 142
+    },
+    "calibrated_images": 30,
+    "candidate_points": 8
+  },
+  "pressure_time": {
+    "plots": 30,
+    "points": 709,
+    "points_per_plot": {
+      "pressure_time_plot_01": 23,
+      "pressure_time_plot_02": 27,
+      "pressure_time_plot_03": 24,
+      "pressure_time_plot_04": 23,
+      "pressure_time_plot_05": 25,
+      "pressure_time_plot_06": 24,
+      "pressure_time_plot_07": 20,
+      "pressure_time_plot_08": 22,
+      "pressure_time_plot_09": 25,
+      "pressure_time_plot_10": 21,
+      "pressure_time_plot_11": 26,
+      "pressure_time_plot_12": 28,
+      "pressure_time_plot_13": 22,
+      "pressure_time_plot_14": 23,
+      "pressure_time_plot_15": 23,
+      "pressure_time_plot_16": 25,
+      "pressure_time_plot_17": 20,
+      "pressure_time_plot_18": 26,
+      "pressure_time_plot_19": 24,
+      "pressure_time_plot_20": 24,
+      "pressure_time_plot_21": 28,
+      "pressure_time_plot_22": 26,
+      "pressure_time_plot_23": 27,
+      "pressure_time_plot_24": 17,
+      "pressure_time_plot_25": 24,
+      "pressure_time_plot_26": 24,
+      "pressure_time_plot_27": 18,
+      "pressure_time_plot_28": 20,
+      "pressure_time_plot_29": 24,
+      "pressure_time_plot_30": 26
+    },
+    "points_per_series": {
+      "Well_01": 187,
+      "Well_02": 163,
+      "Well_03": 177,
+      "Well_04": 182
+    },
+    "calibrated_images": 30,
+    "legend_markers_excluded": 120,
+    "unknown_unit_images": 30
+  },
+  "anomaly_candidates": 1291,
+  "anomaly_candidates_by_rule": {
+    "equipment_failure_section_present": 148,
+    "operation_lost_circulation": 65,
+    "operation_repair": 502,
+    "operation_state_fail": 480,
+    "operation_well_control": 43,
+    "period_precedes_spud_date": 45,
+    "pixel_curve_relative_position": 8
+  },
+  "interpretation": {
+    "status": "candidate_level",
+    "domain_validated": false,
+    "sor_definition": "unresolved",
+    "pressure_time_unit": "unknown",
+    "identity_mappings": "unresolved unless reviewed evidence exists"
+  }
+}

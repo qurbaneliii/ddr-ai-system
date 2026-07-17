@@ -1,0 +1,23 @@
+{
+  "documents": 1000,
+  "statuses": {
+    "skipped_unchanged": 1000
+  },
+  "rows": 0,
+  "rows_by_section": {
+    "bit_record": 344,
+    "casing_liner_tubing": 865,
+    "core_information": 15,
+    "drilling_fluid": 40276,
+    "equipment_failure_information": 1183,
+    "gas_reading_information": 1003,
+    "lithology_information": 797,
+    "log_information": 269,
+    "perforation_information": 336,
+    "pore_pressure": 5286,
+    "stratigraphic_information": 280,
+    "survey_station": 1547,
+    "welltest_information": 3
+  },
+  "sentinel_cells_normalized": 3511
+}

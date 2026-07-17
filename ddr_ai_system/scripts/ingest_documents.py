@@ -1,0 +1,18 @@
+from __future__ import annotations
+
+from ddr_ai.config import get_settings
+from ddr_ai.db.session import create_schema
+from ddr_ai.services.processor import process_paths
+
+
+def main() -> None:
+    settings = get_settings()
+    create_schema()
+    paths = sorted(settings.raw_dir.rglob("*.pdf"))
+    for result in process_paths(paths):
+        print(result)
+
+
+if __name__ == "__main__":
+    main()
+

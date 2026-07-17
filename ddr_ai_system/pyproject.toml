@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ddr-ai-system"
+version = "0.1.0"
+description = "Local-first document intelligence MVP for Daily Drilling Reports"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Proprietary demonstration"}
+dependencies = [
+  "alembic>=1.13,<2",
+  "numpy>=1.26,<3",
+  "opencv-python-headless>=4.10,<5",
+  "pandas>=2.2,<3",
+  "pdfplumber>=0.11,<1",
+  "Pillow>=12.2,<13",
+  "plotly>=5.24,<7",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "pypdf>=5,<7",
+  "scikit-learn>=1.5,<2",
+  "scipy>=1.13,<2",
+  "SQLAlchemy>=2.0,<3",
+  "sqlglot>=25,<30",
+  "streamlit>=1.40,<2",
+  "python-dotenv>=1.0,<2",
+]
+
+[project.optional-dependencies]
+ocr = ["rapidocr-onnxruntime>=1.4,<2"]
+postgres = ["psycopg[binary]>=3.2,<4"]
+llm = ["openai>=1.50,<2"]
+dev = [
+  "mypy>=1.11,<2",
+  "pytest>=8.3,<9",
+  "pytest-cov>=5,<7",
+  "ruff>=0.12,<1",
+]
+
+[project.scripts]
+ddr-audit = "ddr_ai.cli:audit"
+ddr-process = "ddr_ai.cli:process"
+ddr-seed-demo = "ddr_ai.cli:seed_demo"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ddr_ai"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"streamlit_app.py" = ["E402"]
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["ddr_ai"]
+warn_unused_ignores = true
+check_untyped_defs = true
+no_implicit_optional = true
+
+[[tool.mypy.overrides]]
+module = ["scipy.*", "rapidocr_onnxruntime"]
+ignore_missing_imports = true
