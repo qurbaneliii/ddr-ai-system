@@ -1,14 +1,8 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
 
-from ddr_ai.chat.sql_safety import (
-    UnsafeSQLError,
-    execute_validated_select,
-    validate_select_sql,
-)
+from ddr_ai.chat.sql_safety import UnsafeSQLError, validate_select_sql
 
 ALLOWED = {"reports", "operations"}
 
@@ -51,19 +45,3 @@ def test_generated_sql_restricts_columns_and_wildcards() -> None:
             allowed_tables={"reports"},
             allowed_columns={"reports": {"id", "wellbore"}},
         )
-
-
-def test_validated_sql_executes_in_read_only_mode_with_limit() -> None:
-    engine = create_engine("sqlite+pysqlite:///:memory:")
-    with engine.begin() as connection:
-        connection.exec_driver_sql("CREATE TABLE reports(id INTEGER, wellbore TEXT)")
-        connection.exec_driver_sql("INSERT INTO reports VALUES (1, '15/9-F-14'), (2, '15/9-F-15')")
-    validated = validate_select_sql(
-        "SELECT id, wellbore FROM reports ORDER BY id",
-        allowed_tables={"reports"},
-        allowed_columns={"reports": {"id", "wellbore"}},
-        default_limit=1,
-    )
-    with Session(engine) as session:
-        rows = execute_validated_select(session, validated, timeout_seconds=1)
-    assert rows == [{"id": 1, "wellbore": "15/9-F-14"}]

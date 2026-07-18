@@ -311,8 +311,7 @@ def _answer_deterministic(
             top = hits[0]
             answer = ChatAnswer(
                 top.text[:1200], "narrative_retrieval",
-                evidence=[{"section_id": hit.section_id, "report_id": hit.report_id,
-                           "file_name": hit.file_name, "page_number": hit.page_number,
+                evidence=[{"file_name": hit.file_name, "page_number": hit.page_number,
                            "section": hit.section_type, "score": hit.score} for hit in hits],
                 limitations=["Lexical local retrieval supplied the factual evidence."], confidence=min(0.9, 0.5 + top.score / 10),
             )

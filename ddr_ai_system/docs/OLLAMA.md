@@ -37,8 +37,6 @@ python scripts/build_embedding_index.py
 
 Set `OLLAMA_ENABLE_SEMANTIC_RETRIEVAL=true` only after that command succeeds. The cache records the exact embedding model and vector dimension and is rebuilt if the model changes. Lexical retrieval remains active in all modes.
 
-Cross-language semantic retrieval quality has not been measured on this machine because Ollama is not installed. Azerbaijani questions are therefore also rewritten into English DDR terminology before both retrieval paths; no multilingual-accuracy claim is made without an evaluated index.
-
 ## Docker Compose workflow
 
 Docker Compose does not publish Ollama's port to the host. The raw service is reachable only as `http://ollama:11434` from the application network.
@@ -66,5 +64,5 @@ LLM_PROVIDER = "ollama"
 OLLAMA_BASE_URL = "https://ollama-proxy.example.com"
 OLLAMA_CHAT_MODEL = "qwen2.5:3b-instruct-q4_K_M"
 OLLAMA_EMBED_MODEL = "bge-m3:567m"
-OLLAMA_REMOTE_AUTH_TOKEN = ""
+OLLAMA_REMOTE_AUTH_TOKEN = "replace-in-streamlit-secrets"
 ```

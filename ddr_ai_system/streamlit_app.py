@@ -140,8 +140,7 @@ def render_chat_message(message: dict[str, Any], message_index: int) -> None:
         st.caption(
             f"Provider: {message.get('provider', 'Lexical fallback')} · "
             f"model: {message.get('model') or 'none'} · route: {message['route']} · "
-            f"language: selected {message.get('selected_language', 'en')} / "
-            f"detected {message.get('detected_language', 'en')} · "
+            f"language: {message.get('selected_language', 'en')} · "
             f"confidence {message['confidence']:.0%} · scope: {message['data_scope']}"
         )
         if message.get("fallback_reason"):

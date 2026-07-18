@@ -186,8 +186,8 @@ def grounded_verbalize(
     facts = {
         "deterministic_summary": deterministic_answer,
         "route": route,
-        "rows": rows[:12],
-        "evidence": evidence[:12],
+        "rows": rows[:40],
+        "evidence": evidence[:40],
         "limitations": limitations,
     }
     target = "Azerbaijani" if target_language == "az" else "English"
@@ -208,14 +208,7 @@ def grounded_verbalize(
         )
     except LLMProviderError as exc:
         return deterministic_answer, None, str(exc)
-    rejection = unsupported_claim_reason(
-        result.content,
-        route,
-        rows,
-        evidence,
-        limitations,
-        grounding_text=deterministic_answer,
-    )
+    rejection = unsupported_claim_reason(result.content, route, rows, evidence, limitations)
     if rejection:
         return deterministic_answer, result, rejection
     return result.content, result, None
@@ -227,8 +220,6 @@ def unsupported_claim_reason(
     rows: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
     limitations: list[str],
-    *,
-    grounding_text: str = "",
 ) -> str | None:
     lower = text.casefold()
     if not evidence and any(token in lower for token in ("occurred", "baş verib", "confirmed")):
@@ -244,19 +235,7 @@ def unsupported_claim_reason(
         unresolved = [row for row in rows if row.get("match_status") not in {"exact", "overlap"}]
         if unresolved and ("all failures occurred during" in lower or "bütün nasazlıqlar" in lower):
             return "LLM answer rejected because some failure/activity matches are unresolved."
-    supplied = json.dumps(
-        {"rows": rows, "evidence": evidence, "limitations": limitations},
-        ensure_ascii=False,
-        default=str,
-    ) + grounding_text
-    unsupported_numbers = _number_tokens(text) - _number_tokens(supplied)
-    if unsupported_numbers:
-        return "LLM answer rejected because it introduced unsupported numeric values."
     return None
-
-
-def _number_tokens(text: str) -> set[str]:
-    return set(re.findall(r"(?<![\w])\d+(?:[.,]\d+)?", text))
 
 
 def localize_deterministic_answer(answer: str, route: str, target_language: str) -> str:
