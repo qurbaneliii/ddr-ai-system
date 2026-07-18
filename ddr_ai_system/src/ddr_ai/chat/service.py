@@ -331,8 +331,10 @@ def answer_question(
     provider: BaseLLMProvider | None = None,
     language: str = "Auto",
 ) -> ChatAnswer:
-    """Route deterministically, retrieve verified facts, then optionally verbalize with Ollama."""
-    active_provider = provider or LexicalFallbackProvider("No reachable Ollama provider was supplied.")
+    """Route deterministically, retrieve verified facts, then optionally verbalize with the configured LLM."""
+    active_provider = provider or LexicalFallbackProvider(
+    "No reachable LLM provider was supplied."
+)
     analysis = analyze_question(question, language, active_provider)
     answer = _answer_deterministic(
         session,

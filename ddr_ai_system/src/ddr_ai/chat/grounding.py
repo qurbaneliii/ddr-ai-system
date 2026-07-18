@@ -5,7 +5,12 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from ddr_ai.nlp.providers import BaseLLMProvider, ChatResult, LLMProviderError, OllamaProvider
+from ddr_ai.nlp.providers import (
+    BaseLLMProvider,
+    ChatResult,
+    LexicalFallbackProvider,
+    LLMProviderError,
+)
 
 GROUNDED_SYSTEM_INSTRUCTION = """You are a grounded assistant for Daily Drilling Reports. Answer in the language of the user's latest question unless the UI explicitly selects another language. Preserve wellbore names, filenames, dates, units and technical identifiers. Use only the supplied SQL results, retrieved report sections and verified plot data. Never invent missing values, mappings, activities, failures, pressure units, anomalies or engineering thresholds. Cite the supporting source records. Clearly distinguish facts, inferences, candidates and unresolved information."""
 
@@ -105,7 +110,7 @@ def analyze_question(
     target = selected_target_language(language_selection, detected)
     fallback_query = deterministic_retrieval_query(question)
     fallback_route = _deterministic_route(question)
-    if not isinstance(provider, OllamaProvider):
+    if isinstance(provider, LexicalFallbackProvider):
         return QueryAnalysis(
             detected,
             target,
@@ -181,7 +186,7 @@ def grounded_verbalize(
     evidence: list[dict[str, Any]],
     limitations: list[str],
 ) -> tuple[str, ChatResult | None, str | None]:
-    if not isinstance(provider, OllamaProvider):
+    if isinstance(provider, LexicalFallbackProvider):
         return deterministic_answer, None, provider.health_check().reason
     facts = {
         "deterministic_summary": deterministic_answer,
