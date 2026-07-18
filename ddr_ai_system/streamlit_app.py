@@ -59,16 +59,28 @@ settings.ensure_directories()
 
 
 def _provider_fingerprint(config: Settings) -> str:
-    token_present = bool(config.ollama_remote_auth_token.get_secret_value())
-    material = "|".join([
-        config.llm_provider,
-        config.normalized_ollama_base_url,
-        config.ollama_chat_model,
-        config.ollama_embed_model,
-        str(config.ollama_timeout_seconds),
-        str(config.ollama_max_retries),
-        str(token_present),
-    ])
+    """Build a cache key without exposing secret values."""
+    openai_key_present = bool(config.openai_api_key.get_secret_value().strip())
+    ollama_token_present = bool(
+        config.ollama_remote_auth_token.get_secret_value().strip()
+    )
+    material = "|".join(
+        [
+            config.llm_provider.casefold().strip(),
+            config.openai_model,
+            config.openai_embedding_model,
+            str(config.openai_timeout_seconds),
+            str(config.openai_max_retries),
+            str(config.openai_max_output_tokens),
+            str(openai_key_present),
+            config.normalized_ollama_base_url,
+            config.ollama_chat_model,
+            config.ollama_embed_model,
+            str(config.ollama_timeout_seconds),
+            str(config.ollama_max_retries),
+            str(ollama_token_present),
+        ]
+    )
     return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
@@ -172,7 +184,7 @@ def render_chat_message(message: dict[str, Any], message_index: int) -> None:
             with st.expander("Generated read-only SQL"):
                 st.code(message["sql"], language="sql")
         if message.get("model_metrics"):
-            with st.expander("Local model metrics"):
+            with st.expander("Model metrics"):
                 st.json(message["model_metrics"])
 
 
@@ -455,24 +467,36 @@ elif page == "Chatbot":
         )
     with status_column:
         status = provider_status(settings, selection=provider_selection)
+        provider_ready = bool(
+            status.get("provider_ready")
+            or (
+                status.get("provider_reachable")
+                and status.get("model_available")
+            )
+        )
         st.markdown(
             f"**Active provider:** {status['active_label']}  \n"
             f"**Model:** {status['model'] or 'none'}  \n"
-            f"**Ollama connection:** {'ready' if status['ollama_reachable'] else 'unreachable'}"
+            f"**Provider connection:** {'ready' if provider_ready else 'unavailable'}"
         )
         if status["fallback_reason"]:
             st.warning(f"Fallback is active: {status['fallback_reason']}")
-    with st.expander("Ollama configuration help"):
+        elif status["active"] == "openai":
+            st.success("OpenAI is configured and available for grounded answers.")
+    with st.expander("LLM configuration"):
         st.code(
-            "ollama serve\n"
-            "ollama pull qwen2.5:3b-instruct-q4_K_M\n"
-            "python -m streamlit run streamlit_app.py",
-            language="powershell",
+            'LLM_PROVIDER = "openai"\n'
+            'OPENAI_API_KEY = "<configure only in Streamlit Secrets>"\n'
+            f'OPENAI_MODEL = "{settings.openai_model}"\n'
+            'OPENAI_TIMEOUT_SECONDS = 60\n'
+            'OPENAI_MAX_RETRIES = 2\n'
+            'OPENAI_MAX_OUTPUT_TOKENS = 1500',
+            language="toml",
         )
         st.caption(
-            "Localhost needs no secret. Streamlit Community Cloud cannot reach Ollama on your "
-            "laptop; public LLM responses require a separately authorized HTTPS endpoint behind "
-            "an authentication proxy."
+            "The live deployment reads OPENAI_API_KEY from Streamlit Secrets. "
+            "The key is never displayed by the app and must never be committed to Git. "
+            "For local development, store it only in the ignored .env.local file."
         )
     messages = chat_messages()
     for message_index, message in enumerate(messages):
