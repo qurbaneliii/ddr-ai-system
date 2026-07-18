@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-import shutil
-import tempfile
 from collections.abc import Mapping
 from functools import lru_cache
 from pathlib import Path
@@ -78,29 +75,6 @@ class Settings(BaseSettings):
     def ensure_directories(self) -> None:
         for directory in (self.raw_dir, self.processed_dir, self.cache_dir):
             directory.mkdir(parents=True, exist_ok=True)
-        self._prepare_streamlit_cloud_database()
-
-    def _prepare_streamlit_cloud_database(self) -> None:
-        """Use an ephemeral writable copy when Community Cloud mounts the repository read-only."""
-        if not self.database_url.startswith("sqlite:///"):
-            return
-        source = Path(self.database_url.removeprefix("sqlite:///"))
-        source_posix = source.as_posix()
-        cloud_runtime = bool(os.getenv("STREAMLIT_SHARING_MODE")) or source_posix.startswith(
-            "/mount/src/"
-        )
-        if not cloud_runtime or not source.is_file():
-            return
-        runtime_dir = Path(tempfile.gettempdir()) / "ddr_ai_system_runtime"
-        runtime_dir.mkdir(parents=True, exist_ok=True)
-        target = runtime_dir / source.name
-        if (
-            not target.exists()
-            or target.stat().st_size != source.stat().st_size
-            or target.stat().st_mtime_ns != source.stat().st_mtime_ns
-        ):
-            shutil.copy2(source, target)
-        self.database_url = f"sqlite:///{target.as_posix()}"
 
     @property
     def normalized_ollama_base_url(self) -> str:
