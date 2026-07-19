@@ -25,6 +25,7 @@ from ddr_ai.db.models import (
     ProcessingJob,
     Report,
     ReportSection,
+    RetrievalChunk,
     SectionTableRow,
     SourceDocument,
 )
@@ -379,7 +380,19 @@ def _safe_name(name: str) -> str:
 def uploads(database_url: str, settings: Settings) -> None:
     header("Upload and process", "One submission validates, deduplicates, and processes each file")
     if not settings.is_postgres:
-        st.warning("SQLite demo mode: extracted upload data is temporary and is lost on restart.")
+        st.warning(
+            "SQLite demo mode: extracted upload records and temporary source bytes can be lost on restart."
+        )
+    elif settings.asset_storage_backend.casefold() != "database":
+        st.info(
+            "PostgreSQL preserves extracted records, text, tables, and citations. Raw uploaded bytes "
+            "are metadata-only and can be unavailable after restart because persistent file storage is not configured."
+        )
+    else:
+        st.info(
+            f"PostgreSQL preserves extracted records; raw files up to {settings.asset_database_max_mb} MB "
+            "use the explicitly enabled bounded database asset store. Larger files remain metadata-only."
+        )
     with st.form("upload-and-process", clear_on_submit=True):
         uploaded = st.file_uploader(
             "PDF, pressure image, or safe ZIP",
@@ -439,7 +452,16 @@ def uploads(database_url: str, settings: Settings) -> None:
                     progress.progress(index / max(len(candidates), 1))
             if any(item.get("status") in {"complete", "skipped_unchanged"} for item in results):
                 st.cache_data.clear()
-            st.dataframe(pd.DataFrame(results), hide_index=True, use_container_width=True)
+            display_results = [
+                {
+                    ("file" if key == "path" else key): (
+                        Path(str(value)).name if key == "path" else value
+                    )
+                    for key, value in item.items()
+                }
+                for item in results
+            ]
+            st.dataframe(pd.DataFrame(display_results), hide_index=True, use_container_width=True)
     with session_scope(database_url) as session:
         jobs = session.execute(
             select(ProcessingJob.status, ProcessingJob.job_type, ProcessingJob.duration_seconds)
@@ -455,6 +477,17 @@ def chat(database_url: str, settings: Settings, selection: ProviderSelection) ->
         "Grounded chatbot", "Deterministic SQL/text/plot facts with optional OpenAI verbalization"
     )
     status = provider_status(settings, selection=selection)
+    with session_scope(database_url) as session:
+        chunk_count = session.scalar(select(func.count(RetrievalChunk.id))) or 0
+        source_types = session.scalar(select(func.count(func.distinct(RetrievalChunk.source_type)))) or 0
+    st.info(
+        f"Answers use the processed DDR corpus. Retrieval index: {chunk_count:,} bounded chunks "
+        f"across {source_types} source types."
+    )
+    st.caption(
+        "Examples: drilling problems across the corpus · cementing reports · top-drive failures · "
+        "drilling-fluid properties · completed and planned activities for 15/9-F-14"
+    )
     st.caption(
         f"Provider: {status['active_label']}"
         + (f" · model {status['model']}" if status.get("model") else "")
@@ -487,6 +520,11 @@ def chat(database_url: str, settings: Settings, selection: ProviderSelection) ->
         return
     st.session_state.last_question_time = time.monotonic()
     st.session_state.question_count += 1
+    conversation_context = [
+        {"role": str(item.get("role", "")), "content": str(item.get("content", ""))}
+        for item in st.session_state.chat_history[-4:]
+        if item.get("role") in {"user", "assistant"} and item.get("content")
+    ]
     st.session_state.chat_history.append({"role": "user", "content": question})
     try:
         with session_scope(database_url) as session:
@@ -495,6 +533,7 @@ def chat(database_url: str, settings: Settings, selection: ProviderSelection) ->
                 question,
                 provider=selection.provider,
                 language=language,
+                history=conversation_context,
             )
         st.session_state.chat_history.append(
             {"role": "assistant", "content": answer.answer, **answer.to_dict()}

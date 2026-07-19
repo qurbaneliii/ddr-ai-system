@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from typing import Any
 
 from ddr_ai.nlp.providers import (
@@ -13,137 +12,6 @@ from ddr_ai.nlp.providers import (
 )
 
 GROUNDED_SYSTEM_INSTRUCTION = """You are a grounded assistant for Daily Drilling Reports. Answer in the language of the user's latest question unless the UI explicitly selects another language. Preserve wellbore names, filenames, dates, units and technical identifiers. Use only the supplied SQL results, retrieved report sections and verified plot data. Never invent missing values, mappings, activities, failures, pressure units, anomalies or engineering thresholds. Cite the supporting source records. Clearly distinguish facts, inferences, candidates and unresolved information."""
-
-QUERY_ANALYSIS_SCHEMA: dict[str, Any] = {
-    "type": "object",
-    "properties": {
-        "detected_language": {"type": "string", "enum": ["az", "en", "mixed"]},
-        "route": {
-            "type": "string",
-            "enum": ["structured", "narrative", "plot", "hybrid"],
-        },
-        "english_retrieval_query": {"type": "string"},
-        "intent": {"type": "string"},
-        "slots": {"type": "object"},
-    },
-    "required": ["detected_language", "route", "english_retrieval_query", "intent", "slots"],
-}
-
-AZERBAIJANI_MARKERS = {
-    "ən",
-    "son",
-    "üçün",
-    "gündəlik",
-    "qısa",
-    "xülasə",
-    "hazırla",
-    "daxilində",
-    "izah",
-    "vahid",
-    "məhdudiyyətini",
-    "hansı",
-    "quyu",
-    "quyularda",
-    "avadanlıq",
-    "nasazlıq",
-    "baş",
-    "verib",
-    "zamanı",
-    "əməliyyat",
-    "aparılırdı",
-    "tarixləri",
-    "mənbələri",
-    "göstər",
-    "hesabat",
-}
-
-
-@dataclass(frozen=True, slots=True)
-class QueryAnalysis:
-    detected_language: str
-    target_language: str
-    route: str
-    retrieval_query: str
-    intent: str
-    slots: dict[str, Any]
-    llm_used: bool
-    fallback_reason: str | None = None
-
-
-def detect_language(question: str) -> str:
-    lower = question.casefold()
-    tokens = set(re.findall(r"[\wəğıöşüç]+", lower, flags=re.UNICODE))
-    az_score = len(tokens & AZERBAIJANI_MARKERS) + sum(
-        lower.count(character) for character in "əğıöşüç"
-    )
-    en_score = len(tokens & {"which", "what", "report", "failure", "equipment", "plot", "trend"})
-    if az_score and en_score:
-        return "mixed"
-    return "az" if az_score else "en"
-
-
-def selected_target_language(selection: str, detected: str) -> str:
-    if selection == "Azərbaycan dili":
-        return "az"
-    if selection == "English":
-        return "en"
-    return "az" if detected in {"az", "mixed"} else "en"
-
-
-def deterministic_retrieval_query(question: str) -> str:
-    lower = question.casefold()
-    if "nasaz" in lower and ("avadan" in lower or "equipment" in lower):
-        return "equipment failure operations activity start end time downtime wellbore report date"
-    replacements = {
-        "quyu": "wellbore",
-        "quyularda": "wellbores",
-        "hesabat": "report",
-        "tarix": "date",
-        "əməliyyat": "operation",
-        "fəaliyyət": "activity",
-        "təzyiq": "pressure",
-        "nasazlıq": "failure",
-        "avadanlıq": "equipment",
-        "mənbə": "source",
-    }
-    result = lower
-    for source, target in replacements.items():
-        result = result.replace(source, target)
-    return " ".join(result.split())
-
-
-def analyze_question(
-    question: str,
-    language_selection: str,
-    provider: BaseLLMProvider,
-) -> QueryAnalysis:
-    del provider
-    detected = detect_language(question)
-    target = selected_target_language(language_selection, detected)
-    fallback_query = deterministic_retrieval_query(question)
-    fallback_route = _deterministic_route(question)
-    return QueryAnalysis(
-        detected,
-        target,
-        fallback_route,
-        fallback_query,
-        fallback_route,
-        {},
-        False,
-        None,
-    )
-
-
-def _deterministic_route(question: str) -> str:
-    lower = question.casefold()
-    if "plot" in lower or "pressure" in lower or "təzyiq" in lower or "min" in lower:
-        return "plot"
-    if "failure" in lower or "nasaz" in lower or "activity" in lower or "əməliyyat" in lower:
-        return "structured"
-    if "mapping" in lower or "related" in lower or "uyğun" in lower:
-        return "hybrid"
-    return "narrative"
-
 
 def grounded_verbalize(
     provider: BaseLLMProvider,
@@ -209,20 +77,53 @@ def unsupported_claim_reason(
     if not evidence and any(token in lower for token in ("occurred", "baş verib", "confirmed")):
         return "LLM answer rejected because it asserted a fact without evidence."
     if (
-        route == "hybrid_mapping"
+        route in {"hybrid_mapping", "structured_mapping"}
         and not rows
         and any(
             token in lower for token in ("are the same", "corresponds to", "eynidir", "uyğundur")
         )
     ):
         return "LLM answer rejected because the plot/wellbore mapping is unresolved."
-    unknown_pressure = any("pressure unit is unknown" in item.casefold() for item in limitations)
+    unknown_pressure = any(
+        "pressure unit is unknown" in item.casefold()
+        or "pressure unit is unknown" in str(item).casefold()
+        or "unit is unknown" in item.casefold()
+        for item in limitations
+    )
     if unknown_pressure and re.search(r"\b(?:psi|kpa|mpa|bar)\b", lower):
         return "LLM answer rejected because the pressure unit is unknown."
-    if route == "structured_failure_activity":
+    if route in {"structured_failure_activity", "structured_equipment_failures"}:
         unresolved = [row for row in rows if row.get("match_status") not in {"exact", "overlap"}]
         if unresolved and ("all failures occurred during" in lower or "bütün nasazlıqlar" in lower):
             return "LLM answer rejected because some failure/activity matches are unresolved."
+
+    def citation_files(value: Any) -> set[str]:
+        if isinstance(value, dict):
+            dictionary_files = {
+                str(item)
+                for key, item in value.items()
+                if key in {"file_name", "source_file"} and isinstance(item, str)
+            }
+            for item in value.values():
+                dictionary_files.update(citation_files(item))
+            return dictionary_files
+        if isinstance(value, list):
+            list_files: set[str] = set()
+            for item in value:
+                list_files.update(citation_files(item))
+            return list_files
+        return set()
+
+    allowed_files = citation_files(evidence) | citation_files(rows)
+    generated_files = set(
+        re.findall(
+            r"[\w.-]+\.(?:pdf|png|jpe?g|tiff?)",
+            text,
+            flags=re.IGNORECASE,
+        )
+    )
+    if generated_files - allowed_files:
+        return "LLM answer rejected because it introduced a citation outside the supplied evidence."
     fact_text = json.dumps(
         {
             "answer": deterministic_answer,
@@ -272,6 +173,18 @@ def localize_deterministic_answer(
             text += f" Mənbə fəaliyyət xülasəsi: {facts['summary_activities']}"
         if facts.get("summary_planned"):
             text += f" Planlaşdırılan fəaliyyət: {facts['summary_planned']}"
+        return text
+    if route == "structured_report_lookup" and facts:
+        wellbore = facts.get("wellbore") or "naməlum quyu"
+        report_date = facts.get("report_date") or "tarixi məlum olmayan"
+        text = (
+            f"{wellbore} üçün {len(rows or [])} mənbə-dəstəkli hesabat xülasəsi tapıldı. "
+            f"Ən son hesabatın tarixi {report_date}-dir."
+        )
+        if facts.get("completed_activities"):
+            text += f" Tamamlanan fəaliyyətlər: {facts['completed_activities']}"
+        if facts.get("planned_activities"):
+            text += f" Planlaşdırılan fəaliyyətlər: {facts['planned_activities']}"
         return text
     if route == "plot_analytics" and facts:
         identifiers = facts.get("plot_identifiers") or ["seçilmiş qrafik"]

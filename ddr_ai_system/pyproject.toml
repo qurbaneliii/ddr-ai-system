@@ -81,5 +81,6 @@ module = [
   "pytesseract",
   "rapidocr_onnxruntime",
   "scipy.*",
+  "sklearn.*",
 ]
 ignore_missing_imports = true

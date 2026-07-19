@@ -1,52 +1,50 @@
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 
-from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from ddr_ai.db.models import Report, ReportSection, SourceDocument
+from ddr_ai.chat.query import QueryAnalyzer
+from ddr_ai.nlp.providers import LexicalFallbackProvider
+from ddr_ai.retrieval.corpus import CorpusRetriever
 
 
 @dataclass(frozen=True, slots=True)
 class SearchHit:
-    section_id: int
-    report_id: int
+    source_type: str
+    source_record_id: int | None
+    report_id: int | None
     file_name: str
     wellbore: str | None
     period_end: str | None
-    page_number: int
-    section_type: str
+    page_number: int | None
+    section_type: str | None
     text: str
     score: float
 
 
-def _terms(query: str) -> list[str]:
-    return [token for token in re.findall(r"[\wÆØÅæøå]{3,}", query.casefold()) if token]
-
-
 def lexical_search(session: Session, query: str, limit: int = 10) -> list[SearchHit]:
-    terms = _terms(query)
-    if not terms:
-        return []
-    predicates = [ReportSection.text.ilike(f"%{term}%") for term in terms]
-    statement = (
-        select(ReportSection, Report, SourceDocument)
-        .join(Report, Report.id == ReportSection.report_id)
-        .join(SourceDocument, SourceDocument.id == Report.source_document_id)
-        .where(or_(*predicates))
-        .limit(max(limit * 5, limit))
-    )
-    scored: list[SearchHit] = []
-    for section, report, document in session.execute(statement):
-        text = section.text.casefold()
-        score = sum(text.count(term) for term in terms) / max(len(terms), 1)
-        scored.append(SearchHit(
-            section_id=section.id, report_id=report.id, file_name=document.file_name,
-            wellbore=report.wellbore, period_end=report.period_end.isoformat() if report.period_end else None,
-            page_number=section.page_number, section_type=section.section_type,
-            text=section.text, score=float(score),
-        ))
-    return sorted(scored, key=lambda item: item.score, reverse=True)[:limit]
+    """Compatibility wrapper over multi-source TF-IDF/character retrieval."""
 
+    plan = QueryAnalyzer().analyze(
+        query,
+        "Auto",
+        LexicalFallbackProvider("Deterministic corpus retrieval."),
+    )
+    plan.limit = max(1, min(limit, 20))
+    hits, _ = CorpusRetriever().search(session, plan)
+    return [
+        SearchHit(
+            source_type=item.source_type,
+            source_record_id=item.source_record_id,
+            report_id=item.report_id,
+            file_name=item.file_name,
+            wellbore=item.wellbore,
+            period_end=item.report_date,
+            page_number=item.page_number,
+            section_type=item.section_type,
+            text=item.text,
+            score=item.score,
+        )
+        for item in hits
+    ]

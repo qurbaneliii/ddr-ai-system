@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -436,6 +437,78 @@ class QueryAudit(Base):
     row_count: Mapped[int | None] = mapped_column(Integer)
     duration_seconds: Mapped[float | None] = mapped_column(Float)
     error_code: Mapped[str | None] = mapped_column(String(128))
+
+
+class RetrievalChunk(Base):
+    """Bounded, source-backed text used by portable corpus retrieval."""
+
+    __tablename__ = "retrieval_chunks"
+    __table_args__ = (
+        UniqueConstraint("chunk_key", name="uq_retrieval_chunk_key"),
+        Index("ix_retrieval_chunks_source_section", "source_type", "section_type"),
+        Index("ix_retrieval_chunks_well_period", "wellbore", "period_end"),
+        Index("ix_retrieval_chunks_document", "source_document_id"),
+        Index("ix_retrieval_chunks_report", "report_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chunk_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    source_record_id: Mapped[int | None] = mapped_column(Integer)
+    source_document_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id", ondelete="CASCADE"), nullable=False
+    )
+    report_id: Mapped[int | None] = mapped_column(
+        ForeignKey("reports.id", ondelete="CASCADE")
+    )
+    wellbore: Mapped[str | None] = mapped_column(String(128))
+    period_end: Mapped[datetime | None] = mapped_column(DateTime)
+    page_number: Mapped[int | None] = mapped_column(Integer)
+    section_type: Mapped[str | None] = mapped_column(String(128))
+    searchable_text: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        nullable=False,
+    )
+
+
+class StoredAsset(Base):
+    """Raw-upload storage metadata with an optional strictly bounded database payload."""
+
+    __tablename__ = "stored_assets"
+    __table_args__ = (
+        UniqueConstraint("source_document_id", name="uq_stored_asset_document"),
+        UniqueConstraint("storage_key", name="uq_stored_asset_key"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    source_document_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    file_name: Mapped[str] = mapped_column(String(512), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(128), nullable=False)
+    byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    storage_backend: Mapped[str] = mapped_column(String(32), nullable=False)
+    storage_key: Mapped[str] = mapped_column(String(256), nullable=False)
+    storage_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    content_bytes: Mapped[bytes | None] = mapped_column(LargeBinary)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(UTC).replace(tzinfo=None),
+        onupdate=lambda: datetime.now(UTC).replace(tzinfo=None),
+        nullable=False,
+    )
 
 
 class SeedVersion(Base):

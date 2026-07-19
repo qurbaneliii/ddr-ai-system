@@ -61,6 +61,7 @@ class BaseLLMProvider(ABC):
         messages: Sequence[dict[str, str]],
         *,
         json_schema: dict[str, Any] | None = None,
+        max_output_tokens: int | None = None,
     ) -> ChatResult:
         """Generate one response."""
 
@@ -81,8 +82,9 @@ class LexicalFallbackProvider(BaseLLMProvider):
         messages: Sequence[dict[str, str]],
         *,
         json_schema: dict[str, Any] | None = None,
+        max_output_tokens: int | None = None,
     ) -> ChatResult:
-        del messages, json_schema
+        del messages, json_schema, max_output_tokens
         raise LLMProviderError(self.reason)
 
 
@@ -171,6 +173,7 @@ class OpenAIProvider(BaseLLMProvider):
         messages: Sequence[dict[str, str]],
         *,
         json_schema: dict[str, Any] | None = None,
+        max_output_tokens: int | None = None,
     ) -> ChatResult:
         instructions = "\n\n".join(
             message["content"]
@@ -187,7 +190,10 @@ class OpenAIProvider(BaseLLMProvider):
         request: dict[str, Any] = {
             "model": self.model,
             "input": inputs,
-            "max_output_tokens": self.settings.openai_max_output_tokens,
+            "max_output_tokens": min(
+                max_output_tokens or self.settings.openai_max_output_tokens,
+                self.settings.openai_max_output_tokens,
+            ),
         }
         if instructions:
             request["instructions"] = instructions
@@ -197,7 +203,7 @@ class OpenAIProvider(BaseLLMProvider):
                     "type": "json_schema",
                     "name": "ddr_grounded_response",
                     "schema": json_schema,
-                    "strict": False,
+                    "strict": True,
                 }
             }
         return self._create(request)

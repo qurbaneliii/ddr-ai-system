@@ -19,6 +19,8 @@ STREAMLIT_SECRET_KEYS = {
     "OPENAI_MAX_RETRIES",
     "OPENAI_MAX_OUTPUT_TOKENS",
     "OPENAI_VLM_ENABLED",
+    "DDR_ASSET_STORAGE_BACKEND",
+    "DDR_ASSET_DATABASE_MAX_MB",
 }
 
 
@@ -46,7 +48,7 @@ class Settings(BaseSettings):
     processed_dir: Path = PROJECT_ROOT / "data/processed"
     cache_dir: Path = PROJECT_ROOT / "data/cache"
     log_level: str = "INFO"
-    parser_version: str = "0.2.0"
+    parser_version: str = "0.3.0"
 
     max_upload_mb: int = Field(default=50, ge=1, le=250)
     max_question_chars: int = Field(default=2000, ge=100, le=10000)
@@ -56,6 +58,8 @@ class Settings(BaseSettings):
     query_timeout_seconds: int = Field(default=10, ge=1, le=120)
     default_query_limit: int = Field(default=200, ge=1, le=1000)
     max_query_limit: int = Field(default=1000, ge=1, le=10000)
+    asset_storage_backend: str = Field(default="metadata_only")
+    asset_database_max_mb: int = Field(default=2, ge=1, le=5)
 
     llm_provider: str = Field(
         default="openai",

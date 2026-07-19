@@ -53,6 +53,12 @@ def render_chat_message(message: dict[str, Any], index: int) -> None:
             f"Answer type: {message.get('answer_type', 'deterministic')} · "
             f"Route: {message.get('route', 'unknown')}"
         )
+        if message.get("retrieval_source_types") or message.get("evidence_hit_count"):
+            sources = ", ".join(message.get("retrieval_source_types") or []) or "structured facts"
+            st.caption(
+                f"Evidence hits: {message.get('evidence_hit_count', 0)} · Sources: {sources} · "
+                f"Corpus: {message.get('corpus_status', 'ready')}"
+            )
         if message.get("fallback_reason"):
             st.info(f"Fallback: {message['fallback_reason']}")
         if message.get("limitations"):
@@ -78,3 +84,11 @@ def render_chat_message(message: dict[str, Any], index: int) -> None:
         if message.get("sql"):
             with st.expander("Generated read-only SQL"):
                 st.code(message["sql"], language="sql")
+        if message.get("rewritten_query") or message.get("query_plan"):
+            with st.expander("Query interpretation (debug)"):
+                if message.get("rewritten_query"):
+                    st.write(f"Standalone query: {message['rewritten_query']}")
+                if message.get("query_plan"):
+                    st.json(message["query_plan"])
+                if message.get("retrieval_diagnostics"):
+                    st.json(message["retrieval_diagnostics"])

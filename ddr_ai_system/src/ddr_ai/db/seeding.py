@@ -81,7 +81,8 @@ def seed_database(
                     target.execute(
                         text(
                             f"SELECT setval(pg_get_serial_sequence('{table.name}', 'id'), "
-                            f"COALESCE((SELECT MAX(id) FROM {table.name}), 1), true)"
+                            f"COALESCE((SELECT MAX(id) FROM {table.name}), 1), "
+                            f"(SELECT MAX(id) IS NOT NULL FROM {table.name}))"
                         )
                     )
     dispose_engine(target_url)

@@ -31,6 +31,8 @@ from ddr_ai.ingestion.router import AssetKind, route_asset
 from ddr_ai.pdf.ocr import BaseOCRBackend, parse_scanned_pdf
 from ddr_ai.pdf.parser import parse_ddr_pdf
 from ddr_ai.plots import digitize_pressure_profile, digitize_pressure_time
+from ddr_ai.retrieval.corpus import replace_document_chunks
+from ddr_ai.services.asset_storage import persist_asset_record
 from ddr_ai.services.failure_correlations import replace_report_correlations
 
 LOGGER = logging.getLogger(__name__)
@@ -378,6 +380,9 @@ def process_file(
             source.processing_status = "complete"
             source.processed_at = datetime.now(UTC).replace(tzinfo=None)
             source.warning_count = 0
+            session.flush()
+            replace_document_chunks(session, source.id)
+            persist_asset_record(session, source, source_path, settings)
             job.status = "complete"
         except Exception as exc:
             LOGGER.exception("Asset processing failed (%s)", decision.kind.value)
