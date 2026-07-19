@@ -560,6 +560,11 @@ class CorpusRetriever:
         threshold: float,
     ) -> list[tuple[int, float]]:
         identifiers = [term.casefold() for term in plan.search_terms if "/" in term or "_" in term]
+        high_signal_terms = {
+            term.casefold()
+            for term in plan.search_terms
+            if len(term) >= 8 or any(character in term for character in ("/", "_", "-"))
+        }
         activity_terms = [item.casefold() for item in plan.activity_names]
         equipment_terms = [item.casefold() for item in plan.equipment_names]
         ranked: list[tuple[int, float]] = []
@@ -573,6 +578,10 @@ class CorpusRetriever:
                 score += 0.12
             if any(value in text or value in str(chunk.metadata_json).casefold() for value in identifiers):
                 score += 0.18
+            score += min(
+                0.3,
+                0.2 * sum(value in text for value in high_signal_terms),
+            )
             if any(value in text for value in activity_terms):
                 score += 0.1
             if any(value in text for value in equipment_terms):

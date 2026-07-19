@@ -62,7 +62,10 @@ def corpus_session() -> Session:
                 section_type="operations",
                 heading_raw="Operations",
                 page_number=2,
-                text="Lost circulation was observed; the stuck pipe was freed after circulation.",
+                text=(
+                    "Lost circulation was observed; the stuck pipe was freed after circulation. "
+                    "Unique marker uniqueddrmarker was recorded."
+                ),
             ),
             ReportSection(
                 report_id=report.id,
@@ -186,6 +189,13 @@ def test_unified_chunks_cover_every_report_source_type_and_are_idempotent() -> N
         "report_summary",
         "section_table_row",
     }
+
+
+def test_rare_exact_term_is_not_lost_by_tfidf_feature_limit() -> None:
+    answer = answer_question(corpus_session(), "Which report contains uniqueddrmarker?")
+    assert answer.route == "corpus_retrieval"
+    assert answer.evidence[0]["file_name"] == "15_9-F-14_2008-06-14.pdf"
+    assert "uniqueddrmarker" in answer.evidence[0]["excerpt"]
 
 
 def test_follow_up_is_rewritten_but_history_is_not_evidence() -> None:

@@ -50,10 +50,11 @@ DOMAIN_SYNONYMS: dict[str, tuple[str, ...]] = {
 }
 
 STOP_WORDS = {
-    "about", "across", "and", "are", "bu", "bunlardan", "corpus", "ddr", "ddr-lərdə",
-    "et", "for", "from", "haqqında", "hansı", "hesabatlarda", "ilə", "in", "most",
-    "nə", "of", "olan", "olub", "qeyd", "reports", "show", "the", "these", "what",
-    "when", "which", "were", "with", "var", "və",
+    "about", "across", "and", "are", "bu", "bunlardan", "contains", "corpus", "ddr",
+    "ddr-lərdə", "et", "for", "from", "haqqında", "hansı", "hesabatlarda", "ilə", "in",
+    "mention", "mentioned", "most", "nə", "of", "olan", "olub", "qeyd", "report",
+    "reported", "reports", "show", "the", "these", "what", "when", "which", "were",
+    "with", "var", "və",
 }
 
 FOLLOW_UP_MARKERS = (
