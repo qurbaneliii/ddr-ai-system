@@ -60,7 +60,7 @@ jobs:
       - name: Tests
         env:
           DDR_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ddr_seed_test
-        run: python -m pytest -q
+        run: python -m pytest -o addopts="" -q
       - name: Compile
         run: python -m compileall -q src streamlit_app.py
       - name: SQLite integrity and revision
