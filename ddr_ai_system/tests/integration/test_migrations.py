@@ -32,6 +32,12 @@ def test_alembic_upgrade_creates_failure_correlation_schema(tmp_path: Path) -> N
         operation_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(operations)")
         }
-    assert version == "0004"
-    assert {"equipment_failures", "failure_operation_matches", "seed_versions"} <= tables
+    assert version == "0005"
+    assert {
+        "equipment_failures",
+        "failure_operation_matches",
+        "retrieval_chunks",
+        "seed_versions",
+        "stored_assets",
+    } <= tables
     assert {"start_datetime", "end_datetime", "temporal_status"} <= operation_columns

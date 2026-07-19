@@ -68,6 +68,35 @@ def test_openai_responses_request_and_optional_image(monkeypatch: pytest.MonkeyP
     assert provider.health_check().last_request_success is True
 
 
+def test_openai_structured_output_uses_strict_schema_and_bounded_tokens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    result = SimpleNamespace(output_text='{"intent":"narrative_corpus_search"}', model="gpt-test", usage=None)
+    responses = FakeResponses(result=result)
+    provider = _provider(monkeypatch, responses)
+    schema = {
+        "type": "object",
+        "additionalProperties": False,
+        "properties": {"intent": {"type": "string"}},
+        "required": ["intent"],
+    }
+    provider.chat(
+        [{"role": "user", "content": "Plan an unclear DDR question."}],
+        json_schema=schema,
+        max_output_tokens=400,
+    )
+    request = responses.requests[0]
+    assert request["max_output_tokens"] == 400
+    assert request["text"] == {
+        "format": {
+            "type": "json_schema",
+            "name": "ddr_grounded_response",
+            "schema": schema,
+            "strict": True,
+        }
+    }
+
+
 @pytest.mark.parametrize("status_code", [401, 429])
 def test_openai_errors_are_classified_without_secret_leakage(
     monkeypatch: pytest.MonkeyPatch, status_code: int

@@ -19,7 +19,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         assert connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0004",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0005",)
         counts = {
             table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             for table in (
@@ -31,6 +31,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
                 "anomalies",
                 "equipment_failures",
                 "failure_operation_matches",
+                "retrieval_chunks",
             )
         }
         matched = connection.execute(
@@ -46,6 +47,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         "anomalies": 1291,
         "equipment_failures": 244,
         "failure_operation_matches": 244,
+        "retrieval_chunks": 18895,
     }
     assert matched == 242
 

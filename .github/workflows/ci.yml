@@ -52,7 +52,14 @@ jobs:
         run: python -m ruff check .
       - name: Mypy
         run: python -m mypy src
+      - name: Prepare dedicated PostgreSQL persistence database
+        run: >-
+          python -c "import psycopg; connection = psycopg.connect(
+          'postgresql://postgres:postgres@localhost:5432/postgres', autocommit=True);
+          connection.execute('CREATE DATABASE ddr_seed_test'); connection.close()"
       - name: Tests
+        env:
+          DDR_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ddr_seed_test
         run: python -m pytest -q
       - name: Compile
         run: python -m compileall -q src streamlit_app.py
@@ -61,7 +68,7 @@ jobs:
           python -c "import sqlite3; c=sqlite3.connect('data/processed/ddr_ai.db');
           assert c.execute('pragma integrity_check').fetchone()==('ok',);
           assert c.execute('pragma foreign_key_check').fetchall()==[];
-          assert c.execute('select version_num from alembic_version').fetchone()==('0004',)"
+          assert c.execute('select version_num from alembic_version').fetchone()==('0005',)"
       - name: PostgreSQL migration
         env:
           DDR_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ddr_ci
