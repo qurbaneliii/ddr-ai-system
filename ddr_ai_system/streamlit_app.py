@@ -1,8 +1,17 @@
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
 
 import streamlit as st
+
+# Streamlit Community Cloud executes this nested entrypoint directly instead of
+# installing the local package. Keep imports deterministic in both deployment
+# and editable-install environments.
+SOURCE_ROOT = Path(__file__).resolve().parent / "src"
+if str(SOURCE_ROOT) not in sys.path:
+    sys.path.insert(0, str(SOURCE_ROOT))
 
 from ddr_ai.config import resolve_settings, streamlit_secret_overrides
 from ddr_ai.db.bootstrap import DatabaseBootstrapError, prepare_runtime_database
