@@ -23,6 +23,8 @@ class PageExtraction(BaseModel):
     deduplicated_character_count: int
     text: str
     table_count: int
+    extraction_method: str = "native_pdf"
+    confidence: float = 1.0
 
 
 class SectionExtraction(BaseModel):

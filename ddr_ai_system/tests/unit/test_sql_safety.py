@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from ddr_ai.chat.grounding import unsupported_claim_reason
 from ddr_ai.chat.sql_safety import UnsafeSQLError, validate_select_sql
 
 ALLOWED = {"reports", "operations"}
@@ -45,3 +46,15 @@ def test_generated_sql_restricts_columns_and_wildcards() -> None:
             allowed_tables={"reports"},
             allowed_columns={"reports": {"id", "wellbore"}},
         )
+
+
+def test_grounding_rejects_unsupported_numeric_claim() -> None:
+    reason = unsupported_claim_reason(
+        "There were 999 failures.",
+        "structured_failure_activity",
+        [{"failure_count": 2}],
+        [{"source_file": "report.pdf", "page_number": 1}],
+        [],
+        deterministic_answer="There were 2 source-backed failures.",
+    )
+    assert reason == "LLM answer rejected because it introduced unsupported numeric claims."

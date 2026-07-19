@@ -104,7 +104,7 @@ def test_chat_main_activity_route_is_grounded() -> None:
     assert answer.evidence[0]["file_name"] == "report.pdf"
 
 
-def test_ollama_unavailable_fallback_is_explicit() -> None:
+def test_lexical_fallback_is_explicit() -> None:
     settings = Settings(llm_provider="lexical", _env_file=None)
     status = provider_status(settings)
     assert status["active"] == "lexical_fallback"
@@ -135,6 +135,22 @@ def test_azerbaijani_equipment_failure_question_is_grounded() -> None:
         "operation_start_time", "operation_end_time", "match_status", "match_confidence",
         "source_file", "failure_page", "operation_page",
     }.issubset(answer.rows[0])
+
+
+def test_azerbaijani_latest_summary_uses_summary_route() -> None:
+    db = session()
+    seed(db)
+    answer = answer_question(
+        db,
+        "Ən son DDR üçün gündəlik qısa xülasə hazırla.",
+        provider=LexicalFallbackProvider("mocked offline mode"),
+        language="Auto",
+    )
+    assert answer.route == "hybrid_summary"
+    assert answer.detected_language == "az"
+    assert answer.selected_language == "az"
+    assert "əməliyyat sətri" in answer.answer
+    assert answer.evidence[0]["file_name"] == "report.pdf"
 
 
 def test_verified_mapping_is_not_inferred_from_index() -> None:

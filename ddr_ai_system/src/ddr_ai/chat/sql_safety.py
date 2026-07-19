@@ -17,8 +17,15 @@ class ValidatedSQL:
 
 
 PROHIBITED = (
-    exp.Insert, exp.Update, exp.Delete, exp.Create, exp.Drop, exp.Alter,
-    exp.Command, exp.Merge, exp.Transaction,
+    exp.Insert,
+    exp.Update,
+    exp.Delete,
+    exp.Create,
+    exp.Drop,
+    exp.Alter,
+    exp.Command,
+    exp.Merge,
+    exp.Transaction,
 )
 
 
@@ -42,15 +49,17 @@ def validate_select_sql(
         raise UnsafeSQLError("SQL did not contain a statement")
     if any(statement.find(kind) is not None for kind in PROHIBITED):
         raise UnsafeSQLError("Only read-only SELECT queries are allowed")
-    if not isinstance(statement, (exp.Select, exp.Union, exp.Intersect, exp.Except)) and not isinstance(
-        statement, exp.Query
-    ):
+    if not isinstance(
+        statement, (exp.Select, exp.Union, exp.Intersect, exp.Except)
+    ) and not isinstance(statement, exp.Query):
         raise UnsafeSQLError("Only SELECT queries are allowed")
     tables = {table.name.casefold() for table in statement.find_all(exp.Table)}
     disallowed = tables - {table.casefold() for table in allowed_tables}
     if disallowed:
         raise UnsafeSQLError(f"Table access is not allowed: {', '.join(sorted(disallowed))}")
     if allowed_columns is not None:
+        if statement.find(exp.Star) is not None:
+            raise UnsafeSQLError("Wildcard columns are not allowed in generated SQL")
         normalized_columns = {
             table.casefold(): {column.casefold() for column in columns}
             for table, columns in allowed_columns.items()

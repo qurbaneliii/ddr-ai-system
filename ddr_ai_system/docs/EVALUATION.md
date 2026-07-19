@@ -1,6 +1,6 @@
 # Evaluation
 
-Generated: 2026-07-17T06:12:29.799192+00:00
+Generated: 2026-07-19T00:43:45.753079+00:00
 
 ## Processing outcome
 
@@ -15,6 +15,9 @@ Generated: 2026-07-17T06:12:29.799192+00:00
 - Operation rows stored: 10983
 - Operation rows marked fail: 480 across 145 PDFs
 - Reports with Equipment Failure Information: 148
+- Reports with populated equipment failures: 146
+- Populated equipment-failure records: 244
+- Failure/activity temporal matches: {'exact': 242, 'missing_operation_time': 1, 'unmatched': 1}
 - Reports excluded from default trends by automated data-quality rules: 45
 - Optional-section table rows stored: 52204
 - Optional rows by section: {'bit_record': 344, 'casing_liner_tubing': 865, 'core_information': 15, 'drilling_fluid': 40276, 'equipment_failure_information': 1183, 'gas_reading_information': 1003, 'lithology_information': 797, 'log_information': 269, 'perforation_information': 336, 'pore_pressure': 5286, 'stratigraphic_information': 280, 'survey_station': 1547, 'welltest_information': 3}
@@ -45,19 +48,13 @@ These are extraction and candidate-level analytics measurements, not drilling-en
 
 The database sentinel-record count can exceed the independent source-text occurrence count because the same source page can be represented in both document-level key/value fields and normalized section tables. It is a record count, not a unique-source-occurrence count.
 
-## Equipment-failure / operational-activity reconciliation
+## Equipment-failure reconciliation
 
-Verified against all cited source PDFs on 2026-07-18:
+- Reports containing the section heading: 148.
+- Reports containing populated rows: 146.
+- Populated records: 244.
+- Exact same-report temporal matches: 242.
+- Unmatched records: 1.
+- Records without a valid Operations interval: 1.
 
-- Reports containing the section heading: 148 across 9 wellbores.
-- Reports containing populated failure rows: 145.
-- Populated failure records: 242.
-- Exact same-report Operations interval matches: 240.
-- Ambiguous or overlap matches: 0.
-- Unmatched failures: 1.
-- Failures with no valid Operations interval: 1.
-- Empty section reports: 3.
-- Source citation pages: 133 on page 1 and 15 on page 2.
-- Source-PDF citation verification failures: 0 across 148 opened PDFs.
-
-The source data records `00:00` for every failure start and `0` downtime for every populated row. Those values are preserved rather than corrected or inferred. The `Equipment Repaired` column also contains `00:00` throughout this corpus; it is retained as a raw value and is not treated as a validated failure-end timestamp.
+The earlier 242/240 hypothesis omitted two distinct source rows on page 2 of `15_9_F_12_2007_06_18.pdf` (`deck cranes` and `cementing unit`). A clean full-corpus reparse retained both records with their different depth/remark evidence and exact same-report drilling matches. The implementation preserves the source-backed 244/242 result rather than deleting valid rows to match the stale hypothesis.

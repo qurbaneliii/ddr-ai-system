@@ -8,6 +8,7 @@ __pycache__/
 htmlcov/
 .env
 .env.local
+.env
 *.db
 *.sqlite
 *.sqlite3
@@ -21,3 +22,9 @@ data/processed/uploads/
 model_cache/
 tmp/
 .streamlit/secrets.toml
+*.db-wal
+*.db-shm
+*_backup.db
+*_clean.db
+*.log
+.DS_Store

@@ -13,7 +13,7 @@ COPY src ./src
 COPY alembic.ini ./
 COPY alembic ./alembic
 COPY streamlit_app.py ./
-RUN pip install ".[ocr,postgres]"
+RUN pip install ".[ocr]"
 RUN mkdir -p /app/data/raw /app/data/processed /app/data/cache
 EXPOSE 8501
 CMD ["streamlit", "run", "streamlit_app.py", "--server.address=0.0.0.0", "--server.port=8501"]

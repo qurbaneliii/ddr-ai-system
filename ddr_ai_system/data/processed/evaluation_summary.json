@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-17T06:12:29.799192+00:00",
+  "generated_at": "2026-07-19T00:43:45.753079+00:00",
   "processing": {
     "statuses": {
       "complete": 1060
@@ -18,6 +18,13 @@
     "fail_operation_rows": 480,
     "pdfs_with_fail_rows": 145,
     "equipment_failure_reports": 148,
+    "populated_failure_reports": 146,
+    "equipment_failure_records": 244,
+    "failure_match_statuses": {
+      "exact": 242,
+      "missing_operation_time": 1,
+      "unmatched": 1
+    },
     "excluded_from_default_trends": 45,
     "optional_section_table_rows": 52204,
     "optional_rows_by_section": {

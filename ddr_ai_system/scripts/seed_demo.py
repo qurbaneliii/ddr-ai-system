@@ -7,7 +7,7 @@ from ddr_ai.services.processor import process_paths
 
 def main() -> None:
     settings = get_settings()
-    upgrade_schema()
+    upgrade_schema(settings.database_url)
     candidates = []
     for pattern, folder in [
         ("15_9_19_A_1980_01_01.pdf", "ddr_pdfs"),
@@ -20,7 +20,7 @@ def main() -> None:
             candidates.append(match)
     if not candidates:
         raise SystemExit("No raw fixtures found. Run scripts/bootstrap_inputs.py first.")
-    for result in process_paths(candidates):
+    for result in process_paths(candidates, database_url=settings.database_url, settings=settings):
         print(result)
 
 

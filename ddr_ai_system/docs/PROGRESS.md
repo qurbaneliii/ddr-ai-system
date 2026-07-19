@@ -1,40 +1,30 @@
 # Progress
 
-## Status
+## Final local status
 
-Implementation and local acceptance are complete. The only unpassed gate is a Docker image build because this workstation's Docker Desktop Linux engine returned HTTP 500 and then stopped answering `docker version`; Compose configuration validation passed.
+- Rebuilt and promoted a standalone Alembic `0004` SQLite demo database using a clean full-corpus parse. Integrity and quick checks return `ok`, foreign-key violations are zero, and journal mode is `delete`.
+- Unified the resolved database URL across migrations, engines, sessions, UI, analytics, chat, and ingestion. Added validated content-addressed runtime snapshots and URL-keyed engine disposal.
+- Retained PostgreSQL support and added a versioned, idempotent, non-overwriting seed command for durable extracted records.
+- Added scanned-PDF OCR through PyMuPDF/Tesseract with page-level method, confidence, provenance, and safe missing-runtime behavior.
+- Replaced the active Ollama/semantic path with deterministic lexical retrieval and optional OpenAI Responses verbalization, safe provider errors, selected-image support, and unsupported-claim rejection.
+- Refactored Streamlit into eight focused pages with one-action upload processing, bounded chat, truthful persistence/provider labels, portable source/overlay images, and isolated metric errors.
+- Removed the tracked root virtual environment and added CI hygiene, SQLite verification, and PostgreSQL migration coverage on Python 3.12.
 
-## Delivered
+## Verified corpus
 
-- Safely inventoried and extracted all three source archives without modifying the originals.
-- Processed 1,000 digital DDR PDFs, 30 pressure profiles, and 30 pressure-time plots with 0 failed files.
-- Stored normalized provenance, report sections, operations, optional-section table cells, plot points, identity-review state, anomalies, processing jobs, and query audits.
-- Added idempotent processing, SHA-256 lineage, Alembic migrations, SQLite/PostgreSQL configuration, safe read-only SQL controls, deterministic no-key chat, and a ten-page Streamlit workspace.
-- Added architecture, audit, data dictionary, extraction rules, assumptions, evaluation, security, and user documentation.
-- Saved verified UI screenshots in `docs/evidence/`.
-
-## Corpus results
-
-- 1,060 documents complete: 1,000 reports and 60 plots.
-- 10,983 operation rows; 480 rows marked fail across 145 reports.
-- 52,204 normalized optional-section table rows; 3,511 source-sentinel cells normalized with raw preservation.
-- 300 pressure-profile points with 30/30 calibrated axes and 8 visual candidates.
-- 709 pressure-time points after excluding 120 legend markers; 30/30 axes calibrated and all pressure units explicitly unresolved.
-- 1,291 operational/visual candidates; none are presented as validated drilling incidents.
+- 1,060 source documents: 1,000 reports and 60 plots.
+- 10,983 operation rows and 1,291 candidate anomalies.
+- 300 pressure-profile points and 709 pressure-time points.
+- 244 populated equipment-failure records: 242 exact temporal matches, 1 unmatched, and 1 without a valid Operations interval.
+- All 30 pressure-time images retain `unit_status=unknown`; no cross-namespace identity is inferred.
 
 ## Acceptance evidence
 
-- `pytest`: 32 passed.
-- `ruff`: all checks passed.
-- `mypy`: no issues in 38 source files.
-- Alembic clean-database upgrade: revisions `0001` and `0002` applied; representative seed produced 4 documents, 2 reports, 17 operation rows, and 2 plots.
-- Browser: dashboard, profile explorer, time explorer, and grounded chatbot rendered with no console errors or overlays. The chat returned 480 fail rows across 5 wellbores with evidence.
-- Docker Compose: `docker compose config --quiet` passed. Docker image runtime verification remains blocked by the local Docker Desktop engine failure described above.
+- Fresh editable install succeeded on Python 3.12.
+- Full local suite, Ruff, mypy, compileall, database integrity/FK/count checks, and repository hygiene passed. Exact final counts are recorded in the delivery report after the last verification run.
+- Local Streamlit health returned HTTP 200. Browser checks rendered Overview metrics, Report browser, Activities, candidate Trends, both pressure image/overlay tabs, one-action upload UI, lexical provider state, English plot citations/SQL/CSV, and an Azerbaijani grounded summary without app exceptions.
+- `docker compose config --quiet` passed. Docker runtime execution was not available because the local Docker Desktop Linux engine pipe was absent.
 
-## Known interpretation limits
+## External deployment gate
 
-- SoR is not defined by the supplied material.
-- Pressure-time y-axis pressure units are unknown.
-- Numeric filename similarity does not establish identity across DDR wellbores, profiles, time-plot files, or displayed series.
-- Automated anomalies and profile-band classifications are review candidates, not ground truth.
-- LibreOffice was unavailable, so the task DOCX was read structurally with `python-docx` but not raster-rendered for visual QA.
+The public deployment can operate as a validated SQLite demo without credentials. Durable production uploads and a real OpenAI response require manually authorized Streamlit Secrets (`DDR_DATABASE_URL` and optionally `OPENAI_API_KEY`). These secrets were not available locally and were neither read nor fabricated. Public deployment and GitHub CI are re-verified after the final push.

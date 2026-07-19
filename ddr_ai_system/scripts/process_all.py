@@ -12,10 +12,15 @@ from ddr_ai.services.processor import process_file
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=None, help="Optional representative subset limit per asset type")
+    parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Optional representative subset limit per asset type",
+    )
     args = parser.parse_args()
     settings = get_settings()
-    upgrade_schema()
+    upgrade_schema(settings.database_url)
     groups = [
         sorted((settings.raw_dir / "ddr_pdfs").rglob("*.pdf")),
         sorted((settings.raw_dir / "pressure_profiles").rglob("*.png")),
@@ -29,7 +34,7 @@ def main() -> None:
         writer = csv.DictWriter(output, fieldnames=fieldnames)
         writer.writeheader()
         for index, path in enumerate(paths, start=1):
-            result = process_file(path)
+            result = process_file(path, database_url=settings.database_url, settings=settings)
             results.append(result)
             writer.writerow(result)
             output.flush()
@@ -51,7 +56,7 @@ def main() -> None:
         "failed": sum(item["status"] == "failed" for item in results),
         "manifest": str(manifest_path),
     }
-    with session_scope() as session:
+    with session_scope(settings.database_url) as session:
         summary["analytics_candidates_created"] = materialize_operational_candidates(session)
     print(json.dumps(summary, indent=2))
 

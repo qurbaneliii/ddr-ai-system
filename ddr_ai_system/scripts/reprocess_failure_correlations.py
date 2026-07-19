@@ -39,19 +39,22 @@ def _arguments() -> argparse.Namespace:
 
 
 def main() -> None:
+    settings = get_settings()
     args = _arguments()
     source_root = args.source_root.resolve()
     source_files = {path.name: path for path in source_root.rglob("*.pdf")}
-    upgrade_schema()
-    with session_scope() as session:
+    upgrade_schema(settings.database_url)
+    with session_scope(settings.database_url) as session:
         report_rows = session.execute(
             select(Report, SourceDocument)
             .join(SourceDocument, SourceDocument.id == Report.source_document_id)
-            .where(Report.id.in_(
-                select(ReportSection.report_id).where(
-                    ReportSection.section_type == "equipment_failure_information"
+            .where(
+                Report.id.in_(
+                    select(ReportSection.report_id).where(
+                        ReportSection.section_type == "equipment_failure_information"
+                    )
                 )
-            ))
+            )
             .order_by(SourceDocument.file_name)
         ).all()
 
@@ -65,19 +68,22 @@ def main() -> None:
             continue
         try:
             parsed = parse_ddr_pdf(source)
-            with session_scope() as session:
+            with session_scope(settings.database_url) as session:
                 report = session.get(Report, detached_report.id)
                 stored_operations = session.scalars(
-                    select(Operation).where(Operation.report_id == report.id)
+                    select(Operation)
+                    .where(Operation.report_id == report.id)
                     .order_by(Operation.row_index)
                 ).all()
                 parsed_by_index = {item.row_index: item for item in parsed.operations}
                 if len(stored_operations) != len(parsed.operations):
-                    operation_mismatches.append({
-                        "file_name": document.file_name,
-                        "stored": len(stored_operations),
-                        "parsed": len(parsed.operations),
-                    })
+                    operation_mismatches.append(
+                        {
+                            "file_name": document.file_name,
+                            "stored": len(stored_operations),
+                            "parsed": len(parsed.operations),
+                        }
+                    )
                 for operation in stored_operations:
                     extracted = parsed_by_index.get(operation.row_index)
                     if extracted is None:
@@ -88,29 +94,40 @@ def main() -> None:
                     operation.temporal_ambiguity = extracted.temporal_ambiguity
                     operation.raw_values_json = extracted.raw_values
                     operation.normalized_values_json = extracted.normalized_values
-                    operation.bbox_json = None if extracted.bbox is None else dict(zip(
-                        ("x0", "top", "x1", "bottom"), extracted.bbox, strict=True
-                    ))
+                    operation.bbox_json = (
+                        None
+                        if extracted.bbox is None
+                        else dict(zip(("x0", "top", "x1", "bottom"), extracted.bbox, strict=True))
+                    )
                 replace_report_correlations(session, report, parsed.equipment_failures)
             if not parsed.equipment_failures:
                 empty_sections.append(document.file_name)
         except Exception as exc:
-            failures.append({
-                "file_name": document.file_name,
-                "reason": f"{type(exc).__name__}: {str(exc)[:300]}",
-            })
+            failures.append(
+                {
+                    "file_name": document.file_name,
+                    "reason": f"{type(exc).__name__}: {str(exc)[:300]}",
+                }
+            )
         if index == 1 or index % 10 == 0 or index == len(report_rows):
-            print(json.dumps({
-                "processed": index,
-                "total": len(report_rows),
-                "parser_failures": len(failures),
-            }), flush=True)
+            print(
+                json.dumps(
+                    {
+                        "processed": index,
+                        "total": len(report_rows),
+                        "parser_failures": len(failures),
+                    }
+                ),
+                flush=True,
+            )
 
-    with session_scope() as session:
+    with session_scope(settings.database_url) as session:
         status_counts = {
-            status: count for status, count in session.execute(
-                select(FailureOperationMatch.match_status, func.count(FailureOperationMatch.id))
-                .group_by(FailureOperationMatch.match_status)
+            status: count
+            for status, count in session.execute(
+                select(
+                    FailureOperationMatch.match_status, func.count(FailureOperationMatch.id)
+                ).group_by(FailureOperationMatch.match_status)
             )
         }
         result = {
@@ -118,10 +135,10 @@ def main() -> None:
             "reports_source_verified": len(report_rows) - len(failures),
             "reports_with_populated_failures": session.scalar(
                 select(func.count(func.distinct(EquipmentFailure.report_id)))
-            ) or 0,
-            "populated_failure_records": session.scalar(
-                select(func.count(EquipmentFailure.id))
-            ) or 0,
+            )
+            or 0,
+            "populated_failure_records": session.scalar(select(func.count(EquipmentFailure.id)))
+            or 0,
             "match_status_counts": status_counts,
             "empty_section_reports": empty_sections,
             "operation_row_count_mismatches": operation_mismatches,

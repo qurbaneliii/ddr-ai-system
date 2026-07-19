@@ -1,67 +1,70 @@
 # DDR AI System
 
-Local-first MVP for structuring, auditing, querying, and visually inspecting Daily Drilling Reports and the supplied pressure plots.
+Evidence-first Daily Drilling Report processing and analysis. The application reads digital and scanned PDFs, digitizes pressure plots, stores normalized facts and provenance in SQL, visualizes trends and candidate anomalies, and answers grounded questions in English or Azerbaijani.
 
-The application uses native layout-aware PDF parsing for digital reports, deterministic computer vision for plot evidence, SQLAlchemy/Alembic for normalized storage, safe read-only query controls, and Streamlit for the demonstration UI. A multilingual local Ollama model performs query analysis and grounded answer formulation; lexical retrieval remains an explicit offline fallback. No proprietary LLM API, billing account, or API key is required. Exact dataset results are generated locally in `docs/DATA_AUDIT.md` and `docs/EVALUATION.md`.
+The SQL database and deterministic analytics are the factual source of truth. OpenAI may verbalize already-retrieved facts when configured; it never supplies counts, citations, units, identity mappings, or engineering conclusions. Without an API key, the same workflows remain available through the explicit lexical fallback.
 
-## Quick start (Windows PowerShell)
+Public demo: <https://ddr-intelligence-qurbaneliii.streamlit.app/>
+
+## Quick start on Windows
+
+Python 3.12 is required.
 
 ```powershell
-python -m venv .venv --system-site-packages
-.\.venv\Scripts\python.exe -m pip install -e ".[dev,ocr]"
-.\.venv\Scripts\python.exe scripts\bootstrap_inputs.py --source-dir "D:\Technical_task_AI_engineer"
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 .\.venv\Scripts\python.exe -m alembic upgrade head
-.\.venv\Scripts\python.exe scripts\audit_inputs.py
-.\.venv\Scripts\python.exe scripts\process_all.py
-.\.venv\Scripts\python.exe scripts\backfill_section_tables.py
-.\.venv\Scripts\python.exe scripts\generate_analytics.py
-.\.venv\Scripts\python.exe scripts\evaluate_pipeline.py
-ollama pull qwen2.5:3b-instruct-q4_K_M
 .\.venv\Scripts\python.exe -m streamlit run streamlit_app.py
 ```
 
-Open `http://localhost:8501`. The original source assets are copied byte-for-byte into the ignored `data/raw/source_archives/` directory and verified by SHA-256 before safe extraction.
+The repository ships a validated standalone SQLite demo database at `data/processed/ddr_ai.db`. Raw source archives are intentionally excluded. To rebuild from authorized sources, use `scripts/bootstrap_inputs.py`, `scripts/process_all.py`, and `scripts/evaluate_pipeline.py`.
+
+## Configuration
+
+Local secrets belong only in ignored `.env.local`; deployment secrets belong in Streamlit Secrets. Never commit either file.
+
+```dotenv
+DDR_DATABASE_URL=postgresql+psycopg://user:password@host:5432/database
+LLM_PROVIDER=openai
+OPENAI_API_KEY=configure-manually
+OPENAI_MODEL=gpt-5.6-luna
+OPENAI_TIMEOUT_SECONDS=60
+OPENAI_MAX_RETRIES=2
+OPENAI_MAX_OUTPUT_TOKENS=1200
+```
+
+- SQLite is the zero-configuration local/read-only demo. Upload-derived records are temporary because Streamlit runtime storage is ephemeral.
+- PostgreSQL-compatible `DDR_DATABASE_URL` is the production persistence path. Extracted text, rows, hashes, and provenance persist across redeployments; raw uploaded files require separate object storage.
+- `gpt-5.6-luna` is the cost-conscious default verified against the official OpenAI model catalog in July 2026. Keep `OPENAI_MODEL` configurable for account availability and future changes.
+- `OPENAI_VLM_ENABLED=true` enables the bounded, selected-image description method. Deterministic CV facts remain authoritative.
+
+Seed an empty production database deliberately and idempotently:
+
+```powershell
+$env:DDR_DATABASE_URL = "postgresql+psycopg://..."
+.\.venv\Scripts\python.exe scripts\seed_production.py --confirm-empty-target --seed-version demo-2026-07
+```
+
+The command refuses a target that already contains documents and records the applied seed version. It never runs during app startup.
 
 ## Verification
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+.\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy src
-.\.venv\Scripts\python.exe -m alembic upgrade head
+.\.venv\Scripts\python.exe -m compileall -q src streamlit_app.py
 ```
 
-## Ollama modes
+For local OCR, install Tesseract and then use the normal app flow. Streamlit Community Cloud installs it from `packages.txt`. Digital PDFs continue through native `pdfplumber` extraction.
 
-- Local: the app uses `http://127.0.0.1:11434` and needs no secret.
-- Secure remote: configure an HTTPS Ollama-compatible reverse proxy and keep its bearer token in ignored `.env.local` or Streamlit Secrets.
-- Lexical fallback: the app remains usable and labels every answer as deterministic/not LLM-generated when Ollama or the selected model is unavailable.
+## Data contract
 
-The selected language can be Auto, Azərbaycan dili, or English. Azerbaijani questions are rewritten into an English DDR retrieval representation before retrieval, while the original question and technical identifiers are preserved. Deterministic SQL/templates, extracted report sections, and stored plot points remain the factual sources; the LLM is never the source of exact values.
+- `-999.99` and `-999.9` become `NULL` with the raw value and `source_sentinel` reason preserved.
+- Pressure-time units remain unknown because the sources do not establish a unit.
+- Numeric filename similarity never establishes identity across DDR wellbores, pressure profiles, pressure-time images, or displayed series.
+- Automated anomalies and plot band classifications are review candidates, not validated drilling incidents.
+- Processing is content-addressed by SHA-256 and unchanged files are skipped.
 
-See `docs/OLLAMA.md` and copy `.env.example` to ignored `.env.local` for configuration. The optional persistent multilingual embedding index is built explicitly with `python scripts/build_embedding_index.py`; it is never rebuilt during Streamlit startup.
-
-## Docker
-
-```powershell
-docker compose up -d ollama
-docker compose exec ollama ollama pull qwen2.5:3b-instruct-q4_K_M
-docker compose exec ollama ollama pull bge-m3:567m
-docker compose up --build app
-```
-
-The default Compose service uses SQLite and mounts `./data`. Ollama has a persistent model volume and no host-published port. Models are pulled only through the deliberate one-time commands above. PostgreSQL is available through the optional `postgres` profile; set `DDR_DATABASE_URL` explicitly when using it.
-
-## Data and confidence contract
-
-- Raw sources remain unchanged and are content-addressed by SHA-256.
-- Optional section tables retain raw cells plus normalized numeric/sentinel cells and page/table coordinates.
-- Deterministic values, inferred values, candidate anomalies, and human validation states are separate.
-- `-999.99` and `-999.9` are stored as `NULL` with their raw form and `source_sentinel` reason.
-- The suspicious 1980 report is retained, flagged, and excluded from default trends.
-- Pressure-time units remain unknown unless verified from source metadata.
-- DDR wellbores, profile identifiers, and pressure-time identifiers are not mapped by numeric index.
-- Plot points without successful local OCR calibration retain pixel evidence and are never presented as exact numeric measurements.
-
-See `docs/USER_GUIDE.md`, `docs/ARCHITECTURE.md`, and `docs/SECURITY.md` for operating details.
-Verified browser screenshots are retained in `docs/evidence/`.
+See [Architecture](docs/ARCHITECTURE.md), [Deployment](docs/DEPLOYMENT.md), [Security](docs/SECURITY.md), [Evaluation](docs/EVALUATION.md), [User guide](docs/USER_GUIDE.md), and the [task-compliance matrix](docs/TASK_COMPLIANCE.md).

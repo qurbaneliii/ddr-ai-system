@@ -30,6 +30,17 @@ QUERY_ANALYSIS_SCHEMA: dict[str, Any] = {
 }
 
 AZERBAIJANI_MARKERS = {
+    "ən",
+    "son",
+    "üçün",
+    "gündəlik",
+    "qısa",
+    "xülasə",
+    "hazırla",
+    "daxilində",
+    "izah",
+    "vahid",
+    "məhdudiyyətini",
     "hansı",
     "quyu",
     "quyularda",
@@ -106,62 +117,21 @@ def analyze_question(
     language_selection: str,
     provider: BaseLLMProvider,
 ) -> QueryAnalysis:
+    del provider
     detected = detect_language(question)
     target = selected_target_language(language_selection, detected)
     fallback_query = deterministic_retrieval_query(question)
     fallback_route = _deterministic_route(question)
-    if isinstance(provider, LexicalFallbackProvider):
-        return QueryAnalysis(
-            detected,
-            target,
-            fallback_route,
-            fallback_query,
-            fallback_route,
-            {},
-            False,
-            provider.health_check().reason,
-        )
-    prompt = (
-        "Analyze the latest DDR question. Preserve the original question. Produce English DDR "
-        "retrieval terminology even when the question is Azerbaijani. Classify only; do not answer.\n\n"
-        f"Question: {question}"
+    return QueryAnalysis(
+        detected,
+        target,
+        fallback_route,
+        fallback_query,
+        fallback_route,
+        {},
+        False,
+        None,
     )
-    try:
-        result = provider.chat(
-            [
-                {"role": "system", "content": GROUNDED_SYSTEM_INSTRUCTION},
-                {"role": "user", "content": prompt},
-            ],
-            json_schema=QUERY_ANALYSIS_SCHEMA,
-        )
-        parsed = json.loads(result.content)
-        retrieval_query = str(parsed.get("english_retrieval_query") or fallback_query).strip()
-        route = str(parsed.get("route") or fallback_route)
-        if route not in {"structured", "narrative", "plot", "hybrid"}:
-            route = fallback_route
-        llm_detected = str(parsed.get("detected_language") or detected)
-        if llm_detected not in {"az", "en", "mixed"}:
-            llm_detected = detected
-        return QueryAnalysis(
-            llm_detected,
-            selected_target_language(language_selection, llm_detected),
-            route,
-            retrieval_query,
-            str(parsed.get("intent") or route),
-            parsed.get("slots") if isinstance(parsed.get("slots"), dict) else {},
-            True,
-        )
-    except (LLMProviderError, json.JSONDecodeError, TypeError, ValueError) as exc:
-        return QueryAnalysis(
-            detected,
-            target,
-            fallback_route,
-            fallback_query,
-            fallback_route,
-            {},
-            False,
-            f"Query analysis fell back to deterministic routing ({type(exc).__name__}).",
-        )
 
 
 def _deterministic_route(question: str) -> str:
@@ -213,7 +183,14 @@ def grounded_verbalize(
         )
     except LLMProviderError as exc:
         return deterministic_answer, None, str(exc)
-    rejection = unsupported_claim_reason(result.content, route, rows, evidence, limitations)
+    rejection = unsupported_claim_reason(
+        result.content,
+        route,
+        rows,
+        evidence,
+        limitations,
+        deterministic_answer=deterministic_answer,
+    )
     if rejection:
         return deterministic_answer, result, rejection
     return result.content, result, None
@@ -225,12 +202,18 @@ def unsupported_claim_reason(
     rows: list[dict[str, Any]],
     evidence: list[dict[str, Any]],
     limitations: list[str],
+    *,
+    deterministic_answer: str = "",
 ) -> str | None:
     lower = text.casefold()
     if not evidence and any(token in lower for token in ("occurred", "baş verib", "confirmed")):
         return "LLM answer rejected because it asserted a fact without evidence."
-    if route == "hybrid_mapping" and not rows and any(
-        token in lower for token in ("are the same", "corresponds to", "eynidir", "uyğundur")
+    if (
+        route == "hybrid_mapping"
+        and not rows
+        and any(
+            token in lower for token in ("are the same", "corresponds to", "eynidir", "uyğundur")
+        )
     ):
         return "LLM answer rejected because the plot/wellbore mapping is unresolved."
     unknown_pressure = any("pressure unit is unknown" in item.casefold() for item in limitations)
@@ -240,12 +223,74 @@ def unsupported_claim_reason(
         unresolved = [row for row in rows if row.get("match_status") not in {"exact", "overlap"}]
         if unresolved and ("all failures occurred during" in lower or "bütün nasazlıqlar" in lower):
             return "LLM answer rejected because some failure/activity matches are unresolved."
+    fact_text = json.dumps(
+        {
+            "answer": deterministic_answer,
+            "rows": rows,
+            "evidence": evidence,
+            "limitations": limitations,
+        },
+        ensure_ascii=False,
+        default=str,
+    )
+
+    def normalize(value: str) -> str:
+        return value.replace(",", "").lstrip("+")
+
+    allowed_numbers = {
+        normalize(value) for value in re.findall(r"(?<![\w])[-+]?\d+(?:[.,]\d+)?", fact_text)
+    }
+    generated_numbers = {
+        normalize(value) for value in re.findall(r"(?<![\w])[-+]?\d+(?:[.,]\d+)?", text)
+    }
+    unsupported_numbers = generated_numbers - allowed_numbers
+    if unsupported_numbers:
+        return "LLM answer rejected because it introduced unsupported numeric claims."
     return None
 
 
-def localize_deterministic_answer(answer: str, route: str, target_language: str) -> str:
+def localize_deterministic_answer(
+    answer: str,
+    route: str,
+    target_language: str,
+    *,
+    rows: list[dict[str, Any]] | None = None,
+) -> str:
     if target_language != "az":
         return answer
+    facts = rows[0] if rows else {}
+    if route == "hybrid_summary" and facts:
+        wellbore = facts.get("wellbore") or "Naməlum quyu"
+        period = facts.get("period_end") or "tarixi məlum olmayan dövr"
+        operation_count = facts.get("operation_count", 0)
+        fail_count = facts.get("fail_operation_count", 0)
+        text = (
+            f"{wellbore} üçün {period} tarixli DDR-də {operation_count} əməliyyat sətri "
+            f"çıxarılıb; {fail_count} əməliyyat sətri nasaz vəziyyət kimi işarələnib."
+        )
+        if facts.get("summary_activities"):
+            text += f" Mənbə fəaliyyət xülasəsi: {facts['summary_activities']}"
+        if facts.get("summary_planned"):
+            text += f" Planlaşdırılan fəaliyyət: {facts['summary_planned']}"
+        return text
+    if route == "plot_analytics" and facts:
+        identifiers = facts.get("plot_identifiers") or ["seçilmiş qrafik"]
+        plot_label = ", ".join(str(item) for item in identifiers)
+        return (
+            f"{plot_label} daxilində "
+            f"{facts.get('series_identifier') or 'seçilmiş sıra'} üçün "
+            f"{facts.get('point_count', 0)} saxlanmış nöqtə əsasında Theil-Sen meyli "
+            f"{facts.get('slope')} naməlum təzyiq vahidi/gün, Spearman rho isə "
+            f"{facts.get('spearman_rho')} kimi hesablanıb. Təzyiq vahidi məlum deyil."
+        )
+    if route == "plot_sql":
+        return f"MIN əyrisindən aşağı təsnif edilmiş {len(rows or [])} ölçülmüş profil nöqtəsi tapıldı."
+    if route == "hybrid_mapping" and not rows:
+        return (
+            "Mövcud metadata bu uyğunluğu təsdiqləmir. Eyni rəqəmli indekslər təzyiq "
+            "profilinin, təzyiq-zaman faylının, göstərilən sıranın və ya DDR quyusunun eyni "
+            "obyekt olduğunu sübut etmir."
+        )
     if route == "structured_failure_activity":
         numbers = re.findall(r"\d+", answer)
         if len(numbers) >= 7:

@@ -1,0 +1,80 @@
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from typing import Any, cast
+
+import pandas as pd
+import streamlit as st
+
+from ddr_ai.assets import ImageTarget, render_image_safely
+
+LOGGER = logging.getLogger(__name__)
+
+
+def header(title: str, subtitle: str) -> None:
+    st.title(title)
+    st.caption(subtitle)
+
+
+def safe_metric(label: str, loader: Callable[[], int], *, suffix: str = "") -> None:
+    try:
+        value = loader()
+        st.metric(label, f"{value:,}{suffix}")
+    except Exception:
+        LOGGER.exception("Metric failed: %s", label)
+        st.metric(label, "Unavailable")
+
+
+def render_plot_images(source_path: str | None, overlay_path: str | None) -> None:
+    source_column, overlay_column = st.columns(2)
+    with source_column:
+        render_image_safely(
+            cast(ImageTarget, st),
+            source_path,
+            caption="Source image",
+            asset_label="Source image",
+        )
+    with overlay_column:
+        render_image_safely(
+            cast(ImageTarget, st),
+            overlay_path,
+            caption="Deterministic CV overlay",
+            asset_label="CV overlay",
+        )
+
+
+def render_chat_message(message: dict[str, Any], index: int) -> None:
+    with st.chat_message(message["role"]):
+        st.write(message["content"])
+        if message["role"] != "assistant":
+            return
+        st.caption(
+            f"Answer type: {message.get('answer_type', 'deterministic')} · "
+            f"Route: {message.get('route', 'unknown')}"
+        )
+        if message.get("fallback_reason"):
+            st.info(f"Fallback: {message['fallback_reason']}")
+        if message.get("limitations"):
+            with st.expander("Limitations"):
+                for limitation in message["limitations"]:
+                    st.write(f"- {limitation}")
+        if message.get("evidence"):
+            with st.expander("Citations and evidence"):
+                st.json(message["evidence"])
+        if message.get("rows"):
+            frame = pd.DataFrame(message["rows"])
+            with st.expander("Deterministic result rows"):
+                st.dataframe(
+                    frame.fillna("Not available"), hide_index=True, use_container_width=True
+                )
+                st.download_button(
+                    "Download result CSV",
+                    frame.to_csv(index=False).encode("utf-8-sig"),
+                    file_name=message.get("export_filename") or f"chat-result-{index}.csv",
+                    mime="text/csv",
+                    key=f"chat-download-{index}",
+                )
+        if message.get("sql"):
+            with st.expander("Generated read-only SQL"):
+                st.code(message["sql"], language="sql")

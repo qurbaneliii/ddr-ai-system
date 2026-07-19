@@ -45,9 +45,12 @@ class SourceDocument(Base):
     )
     processed_at: Mapped[datetime | None] = mapped_column(DateTime)
 
-    pages: Mapped[list[Page]] = relationship(back_populates="document", cascade="all, delete-orphan")
-    report: Mapped[Report | None] = relationship(back_populates="document", uselist=False,
-                                                  cascade="all, delete-orphan")
+    pages: Mapped[list[Page]] = relationship(
+        back_populates="document", cascade="all, delete-orphan"
+    )
+    report: Mapped[Report | None] = relationship(
+        back_populates="document", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class ProcessingJob(Base):
@@ -70,10 +73,14 @@ class ProcessingJob(Base):
 
 class Page(Base):
     __tablename__ = "pages"
-    __table_args__ = (UniqueConstraint("source_document_id", "page_number", name="uq_document_page"),)
+    __table_args__ = (
+        UniqueConstraint("source_document_id", "page_number", name="uq_document_page"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    source_document_id: Mapped[int] = mapped_column(ForeignKey("source_documents.id"), nullable=False)
+    source_document_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id"), nullable=False
+    )
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     width: Mapped[float] = mapped_column(Float, nullable=False)
     height: Mapped[float] = mapped_column(Float, nullable=False)
@@ -94,7 +101,9 @@ class Report(Base):
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    source_document_id: Mapped[int] = mapped_column(ForeignKey("source_documents.id"), nullable=False)
+    source_document_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id"), nullable=False
+    )
     wellbore: Mapped[str | None] = mapped_column(String(128), index=True)
     filename_wellbore: Mapped[str | None] = mapped_column(String(128))
     period_start: Mapped[datetime | None] = mapped_column(DateTime)
@@ -107,13 +116,21 @@ class Report(Base):
     summary_planned: Mapped[str | None] = mapped_column(Text)
     filename_identity_match: Mapped[bool | None] = mapped_column(Boolean)
     filename_date_match: Mapped[bool | None] = mapped_column(Boolean)
-    excluded_from_default_trends: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    data_quality_status: Mapped[str] = mapped_column(String(32), default="unreviewed", nullable=False)
+    excluded_from_default_trends: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
+    data_quality_status: Mapped[str] = mapped_column(
+        String(32), default="unreviewed", nullable=False
+    )
     confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
 
     document: Mapped[SourceDocument] = relationship(back_populates="report")
-    sections: Mapped[list[ReportSection]] = relationship(back_populates="report", cascade="all, delete-orphan")
-    operations: Mapped[list[Operation]] = relationship(back_populates="report", cascade="all, delete-orphan")
+    sections: Mapped[list[ReportSection]] = relationship(
+        back_populates="report", cascade="all, delete-orphan"
+    )
+    operations: Mapped[list[Operation]] = relationship(
+        back_populates="report", cascade="all, delete-orphan"
+    )
     equipment_failures: Mapped[list[EquipmentFailure]] = relationship(
         back_populates="report", cascade="all, delete-orphan"
     )
@@ -163,7 +180,9 @@ class Operation(Base):
     temporal_status: Mapped[str] = mapped_column(String(64), nullable=False, default="unprocessed")
     temporal_ambiguity: Mapped[str | None] = mapped_column(Text)
     raw_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    normalized_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    normalized_values_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     bbox_json: Mapped[dict[str, float] | None] = mapped_column(JSON)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
@@ -176,7 +195,9 @@ class ExtractedValue(Base):
     __table_args__ = (Index("ix_values_document_field", "source_document_id", "field_name"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    source_document_id: Mapped[int] = mapped_column(ForeignKey("source_documents.id"), nullable=False)
+    source_document_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id"), nullable=False
+    )
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     section_type: Mapped[str | None] = mapped_column(String(128))
     field_name: Mapped[str] = mapped_column(String(256), nullable=False)
@@ -196,7 +217,10 @@ class SectionTableRow(Base):
     __tablename__ = "section_table_rows"
     __table_args__ = (
         UniqueConstraint(
-            "source_document_id", "page_number", "table_index", "row_index",
+            "source_document_id",
+            "page_number",
+            "table_index",
+            "row_index",
             name="uq_section_table_source_row",
         ),
         Index("ix_section_table_report_type", "report_id", "section_type"),
@@ -219,16 +243,17 @@ class SectionTableRow(Base):
     )
     table_bbox_json: Mapped[dict[str, float]] = mapped_column(JSON, nullable=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.9)
-    validation_status: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="unreviewed"
-    )
+    validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
 
 
 class EquipmentFailure(Base):
     __tablename__ = "equipment_failures"
     __table_args__ = (
         UniqueConstraint(
-            "report_id", "page_number", "table_index", "row_index",
+            "report_id",
+            "page_number",
+            "table_index",
+            "row_index",
             name="uq_equipment_failure_source_row",
         ),
         Index("ix_equipment_failures_report_start", "report_id", "start_datetime"),
@@ -236,7 +261,9 @@ class EquipmentFailure(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     report_id: Mapped[int] = mapped_column(ForeignKey("reports.id"), nullable=False)
-    source_document_id: Mapped[int] = mapped_column(ForeignKey("source_documents.id"), nullable=False)
+    source_document_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id"), nullable=False
+    )
     report_section_id: Mapped[int | None] = mapped_column(ForeignKey("report_sections.id"))
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     section_type: Mapped[str] = mapped_column(
@@ -263,7 +290,9 @@ class EquipmentFailure(Base):
     temporal_status: Mapped[str] = mapped_column(String(64), nullable=False, default="unprocessed")
     temporal_ambiguity: Mapped[str | None] = mapped_column(Text)
     raw_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
-    normalized_values_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    normalized_values_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     bbox_json: Mapped[dict[str, float] | None] = mapped_column(JSON)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=0.9)
     validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
@@ -303,7 +332,9 @@ class Plot(Base):
     __table_args__ = (UniqueConstraint("source_document_id", name="uq_plot_document"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    source_document_id: Mapped[int] = mapped_column(ForeignKey("source_documents.id"), nullable=False)
+    source_document_id: Mapped[int] = mapped_column(
+        ForeignKey("source_documents.id"), nullable=False
+    )
     plot_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     plot_identifier: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     width: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -333,7 +364,9 @@ class PlotPoint(Base):
     x_value: Mapped[float | None] = mapped_column(Float)
     y_value: Mapped[float | None] = mapped_column(Float)
     observed_date: Mapped[date | None] = mapped_column(Date)
-    reference_values_json: Mapped[dict[str, float | None]] = mapped_column(JSON, nullable=False, default=dict)
+    reference_values_json: Mapped[dict[str, float | None]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
     band_classification: Mapped[str | None] = mapped_column(String(64), index=True)
     anomaly_candidate: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     confidence: Mapped[float] = mapped_column(Float, nullable=False)
@@ -343,15 +376,22 @@ class PlotPoint(Base):
 class IdentityMapping(Base):
     __tablename__ = "identity_mappings"
     __table_args__ = (
-        UniqueConstraint("source_namespace", "source_identifier", "target_namespace",
-                         "target_identifier", name="uq_identity_mapping"),
+        UniqueConstraint(
+            "source_namespace",
+            "source_identifier",
+            "target_namespace",
+            "target_identifier",
+            name="uq_identity_mapping",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source_namespace: Mapped[str] = mapped_column(String(128), nullable=False)
     source_identifier: Mapped[str] = mapped_column(String(256), nullable=False)
     target_namespace: Mapped[str] = mapped_column(String(128), nullable=False)
-    target_identifier: Mapped[str] = mapped_column(String(256), nullable=False, default="unresolved")
+    target_identifier: Mapped[str] = mapped_column(
+        String(256), nullable=False, default="unresolved"
+    )
     mapping_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unresolved")
     mapping_source: Mapped[str] = mapped_column(String(256), nullable=False, default="no_metadata")
     evidence: Mapped[str | None] = mapped_column(Text)
@@ -396,3 +436,13 @@ class QueryAudit(Base):
     row_count: Mapped[int | None] = mapped_column(Integer)
     duration_seconds: Mapped[float | None] = mapped_column(Float)
     error_code: Mapped[str | None] = mapped_column(String(128))
+
+
+class SeedVersion(Base):
+    __tablename__ = "seed_versions"
+
+    version: Mapped[str] = mapped_column(String(128), primary_key=True)
+    source_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    applied_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False
+    )

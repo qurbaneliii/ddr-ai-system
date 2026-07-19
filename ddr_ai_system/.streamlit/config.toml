@@ -11,3 +11,6 @@ backgroundColor = "#10252C"
 secondaryBackgroundColor = "#19353D"
 textColor = "#ECF6F4"
 primaryColor = "#5EEAD4"
+
+[server]
+maxUploadSize = 50

@@ -23,7 +23,9 @@ from ddr_ai.services.failure_correlations import ensure_failure_correlations
 
 
 def _arguments() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Verify failure/activity citations against source PDFs.")
+    parser = argparse.ArgumentParser(
+        description="Verify failure/activity citations against source PDFs."
+    )
     parser.add_argument("--source-root", type=Path, default=get_settings().raw_dir / "ddr_pdfs")
     parser.add_argument(
         "--output",
@@ -42,10 +44,11 @@ def _evidence_prefix(value: str | None, length: int = 32) -> str:
 
 
 def main() -> None:
+    settings = get_settings()
     args = _arguments()
     source_files = {path.name: path for path in args.source_root.resolve().rglob("*.pdf")}
-    upgrade_schema()
-    with session_scope() as session:
+    upgrade_schema(settings.database_url)
+    with session_scope(settings.database_url) as session:
         ensure_failure_correlations(session)
         sections = session.execute(
             select(ReportSection, Report, SourceDocument)
@@ -91,58 +94,71 @@ def main() -> None:
     for section, _report, document in sections:
         text = page_text(document.file_name, section.page_number)
         if text is None:
-            failures.append({
-                "file_name": document.file_name,
-                "page_number": section.page_number,
-                "reason": "source_or_page_missing",
-            })
+            failures.append(
+                {
+                    "file_name": document.file_name,
+                    "page_number": section.page_number,
+                    "reason": "source_or_page_missing",
+                }
+            )
         elif "equipmentfailureinformation" not in _normalized(text):
-            failures.append({
-                "file_name": document.file_name,
-                "page_number": section.page_number,
-                "reason": "section_heading_not_found",
-            })
+            failures.append(
+                {
+                    "file_name": document.file_name,
+                    "page_number": section.page_number,
+                    "reason": "section_heading_not_found",
+                }
+            )
 
     for failure, _match, operation, document in evidence_rows:
         failure_text = page_text(document.file_name, failure.page_number)
         prefix = _evidence_prefix(failure.failure_remark)
         if failure_text is None or (prefix and prefix not in _normalized(failure_text)):
-            failures.append({
-                "file_name": document.file_name,
-                "page_number": failure.page_number,
-                "failure_id": failure.id,
-                "reason": "failure_row_evidence_not_found",
-            })
+            failures.append(
+                {
+                    "file_name": document.file_name,
+                    "page_number": failure.page_number,
+                    "failure_id": failure.id,
+                    "reason": "failure_row_evidence_not_found",
+                }
+            )
         if operation is not None:
             operation_text = page_text(document.file_name, operation.page_number)
             operation_prefix = _evidence_prefix(operation.remark)
             if operation_text is None or "operations" not in operation_text.casefold():
-                failures.append({
-                    "file_name": document.file_name,
-                    "page_number": operation.page_number,
-                    "operation_id": operation.id,
-                    "reason": "operations_section_not_found",
-                })
+                failures.append(
+                    {
+                        "file_name": document.file_name,
+                        "page_number": operation.page_number,
+                        "operation_id": operation.id,
+                        "reason": "operations_section_not_found",
+                    }
+                )
             elif operation_prefix and operation_prefix not in _normalized(operation_text):
-                failures.append({
-                    "file_name": document.file_name,
-                    "page_number": operation.page_number,
-                    "operation_id": operation.id,
-                    "reason": "operation_row_evidence_not_found",
-                })
+                failures.append(
+                    {
+                        "file_name": document.file_name,
+                        "page_number": operation.page_number,
+                        "operation_id": operation.id,
+                        "reason": "operation_row_evidence_not_found",
+                    }
+                )
 
     status_counts = Counter()
     for _failure_id, status in {
-        (failure.id, match.match_status)
-        for failure, match, _operation, _doc in evidence_rows
+        (failure.id, match.match_status) for failure, match, _operation, _doc in evidence_rows
     }:
         status_counts[status] += 1
-    report_ids_with_failures = {failure.report_id for failure, _match, _operation, _doc in evidence_rows}
+    report_ids_with_failures = {
+        failure.report_id for failure, _match, _operation, _doc in evidence_rows
+    }
     section_pages = Counter(section.page_number for section, _report, _document in sections)
     result = {
         "reports_containing_section": len(sections),
         "reports_with_populated_failures": len(report_ids_with_failures),
-        "populated_failure_records": len({failure.id for failure, _match, _operation, _doc in evidence_rows}),
+        "populated_failure_records": len(
+            {failure.id for failure, _match, _operation, _doc in evidence_rows}
+        ),
         "match_status_counts": dict(sorted(status_counts.items())),
         "wellbores": len({report.wellbore for _section, report, _document in sections}),
         "section_page_counts": {str(page): count for page, count in sorted(section_pages.items())},

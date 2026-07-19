@@ -1,9 +1,10 @@
 # Security
 
-- ZIP entries are normalized and rejected for path traversal, absolute/drive paths, symbolic links, executables, collisions, excessive entry sizes, aggregate size, or suspicious compression ratios.
-- Upload sizes and supported file types are bounded.
-- File hashes provide idempotency and unchanged-file skipping.
-- Report text is untrusted data and is never interpreted as application instructions.
-- SQL is parsed as an AST, limited to a single read-only query, restricted to allowed tables, bounded by row limits, and executed without user string interpolation.
-- Errors exposed to users are sanitized and secrets are not logged.
-- Local Ollama is the primary LLM/embedding provider; lexical retrieval is the deterministic fallback. Remote Ollama is accepted only through HTTPS with an authentication proxy token. No proprietary API key is required.
+- Secrets are read only from ignored `.env.local`, environment variables, or supported Streamlit Secrets. They are never displayed, logged, committed, or embedded in client code.
+- Provider exceptions are classified into sanitized authentication, rate-limit, timeout, connection, and HTTP-status messages. Provider health uses configuration and last-request state, not a paid probe.
+- ZIP uploads reject traversal, absolute/drive paths, links, executables, collisions, oversized entries/archives, and suspicious compression ratios. File count, type, question length, request rate, history, and session question limits are bounded.
+- SHA-256 makes ingestion idempotent. Uploads use one submit action and duplicate content is skipped.
+- Report text is untrusted data. SQL is AST-validated, single-statement and `SELECT`-only, with allowlisted tables/columns and bounded results.
+- Exact numeric facts, citations, units, mappings, and candidate status come from deterministic storage. Generated answers introducing unsupported numbers, units, mappings, or incident claims are rejected.
+- The committed database is standalone, uses `journal_mode=delete`, and must pass integrity and foreign-key checks. WAL/SHM files, virtual environments, logs, and secret files are ignored and rejected by CI hygiene checks.
+- SQLite demo uploads do not persist across redeployment. PostgreSQL persists extracted records; raw-file durability requires separately authorized object storage.

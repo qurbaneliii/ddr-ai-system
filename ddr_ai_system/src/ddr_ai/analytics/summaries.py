@@ -17,6 +17,12 @@ class GroundedSummary:
     limitations: list[str]
 
 
+def _meaningful_summary(value: str | None) -> str | None:
+    if value is None or value.strip().casefold() in {"", "none", "n/a", "not available"}:
+        return None
+    return value.strip()
+
+
 def build_daily_summary(session: Session, report_id: int) -> GroundedSummary:
     row = session.execute(
         select(Report, SourceDocument).join(SourceDocument, SourceDocument.id == Report.source_document_id)
@@ -37,6 +43,8 @@ def build_daily_summary(session: Session, report_id: int) -> GroundedSummary:
         durations[category] = durations.get(category, 0.0) + (operation.duration_hours or 0.0)
     depths = [item.end_depth_mmd for item in operations if item.end_depth_mmd is not None]
     fail_rows = [item for item in operations if item.state_normalized == "fail"]
+    summary_activities = _meaningful_summary(report.summary_activities)
+    summary_planned = _meaningful_summary(report.summary_planned)
     facts = {
         "wellbore": report.wellbore,
         "period_start": report.period_start.isoformat() if report.period_start else None,
@@ -48,8 +56,8 @@ def build_daily_summary(session: Session, report_id: int) -> GroundedSummary:
         "depth_change_m": round(depths[-1] - depths[0], 3) if len(depths) >= 2 else None,
         "fail_operation_count": len(fail_rows),
         "equipment_failure_section_count": len(failures),
-        "summary_activities": report.summary_activities,
-        "summary_planned": report.summary_planned,
+        "summary_activities": summary_activities,
+        "summary_planned": summary_planned,
         "excluded_from_default_trends": report.excluded_from_default_trends,
     }
     lead = f"{report.wellbore or 'Unknown wellbore'} for {facts['period_end'] or 'unknown period'}"
@@ -61,10 +69,10 @@ def build_daily_summary(session: Session, report_id: int) -> GroundedSummary:
         clauses.append(f"and a row-end depth change of {facts['depth_change_m']:.3f} m")
     clauses.append(f"{len(fail_rows)} operation rows are marked fail")
     text = lead + " " + "; ".join(clauses) + "."
-    if report.summary_activities:
-        text += f" Source activity summary: {report.summary_activities}"
-    if report.summary_planned:
-        text += f" Planned: {report.summary_planned}"
+    if summary_activities:
+        text += f" Source activity summary: {summary_activities}"
+    if summary_planned:
+        text += f" Planned: {summary_planned}"
     citations = [{"file_name": document.file_name, "page_number": 1,
                   "section": "summary_report", "report_id": report.id}]
     citations.extend({"file_name": document.file_name, "page_number": item.page_number,
