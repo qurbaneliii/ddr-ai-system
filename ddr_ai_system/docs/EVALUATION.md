@@ -48,6 +48,16 @@ These are extraction and candidate-level analytics measurements, not drilling-en
 
 The database sentinel-record count can exceed the independent source-text occurrence count because the same source page can be represented in both document-level key/value fields and normalized section tables. It is a record count, not a unique-source-occurrence count.
 
+## Open-ended retrieval evaluation
+
+- Retrieval projection: 18,895 unique chunks from 1,060 source documents.
+- Source coverage: 1,000 report summaries, 5,065 narrative sections, 2,594 bounded operation groups, 2,000 extracted-value groups, 7,932 optional-table groups, 244 equipment failures, and 60 deterministic plot-fact chunks.
+- Full-corpus cold word-index build observed locally: 5.277 seconds; subsequent questions in the same process were approximately 0.18–0.19 seconds. Character n-grams build lazily only for a relaxed second pass.
+- Reproduced pre-fix questions searched only `report_section`; all five broad questions returned a raw top section even when other structured evidence existed. The final full-corpus reproduction returned 10 evidence hits for each broad question and multi-source English evidence; Azerbaijani detection and wellbore follow-up rewriting were correct.
+- Deterministic fixtures cover bilingual drilling problems, cementing, circulation losses, stuck pipe, drilling-fluid properties, completed/planned activities, follow-up resolution, absent wells/dates, current oil-price refusal, citation allowlisting, numeric rejection, and structured query-analysis token limits.
+
+The retrieval evaluation measures whether stored DDR evidence is found and correctly bounded. It does not establish engineering completeness beyond the processed corpus.
+
 ## Equipment-failure reconciliation
 
 - Reports containing the section heading: 148.

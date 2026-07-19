@@ -2,7 +2,7 @@
 
 Evidence-first Daily Drilling Report processing and analysis. The application reads digital and scanned PDFs, digitizes pressure plots, stores normalized facts and provenance in SQL, visualizes trends and candidate anomalies, and answers grounded questions in English or Azerbaijani.
 
-The SQL database and deterministic analytics are the factual source of truth. OpenAI may verbalize already-retrieved facts when configured; it never supplies counts, citations, units, identity mappings, or engineering conclusions. Without an API key, the same workflows remain available through the explicit lexical fallback.
+The SQL database and deterministic analytics are the factual source of truth. A typed query plan selects a trusted structured handler or ranked multi-source corpus retrieval. OpenAI may analyze an unclear question and verbalize a bounded evidence pack when configured; it never supplies SQL, counts, citations, units, identity mappings, or engineering conclusions. Without an API key, the same workflows remain available through the explicit deterministic/lexical fallback.
 
 Public demo: <https://ddr-intelligence-qurbaneliii.streamlit.app/>
 
@@ -31,10 +31,13 @@ OPENAI_MODEL=gpt-5.6-luna
 OPENAI_TIMEOUT_SECONDS=60
 OPENAI_MAX_RETRIES=2
 OPENAI_MAX_OUTPUT_TOKENS=1200
+DDR_ASSET_STORAGE_BACKEND=metadata_only
+DDR_ASSET_DATABASE_MAX_MB=2
 ```
 
 - SQLite is the zero-configuration local/read-only demo. Upload-derived records are temporary because Streamlit runtime storage is ephemeral.
-- PostgreSQL-compatible `DDR_DATABASE_URL` is the production persistence path. Extracted text, rows, hashes, and provenance persist across redeployments; raw uploaded files require separate object storage.
+- PostgreSQL-compatible `DDR_DATABASE_URL` is the production persistence path. Extracted text, rows, hashes, retrieval chunks, and provenance persist across redeployments.
+- Raw upload storage defaults to `metadata_only`: SHA-256, filename, media type, byte size, storage key, and truthful status persist, while source bytes may disappear after restart. `DDR_ASSET_STORAGE_BACKEND=database` explicitly enables a bounded demo store up to `DDR_ASSET_DATABASE_MAX_MB` (maximum 5 MB); production object storage remains preferable.
 - `gpt-5.6-luna` is the cost-conscious default verified against the official OpenAI model catalog in July 2026. Keep `OPENAI_MODEL` configurable for account availability and future changes.
 - `OPENAI_VLM_ENABLED=true` enables the bounded, selected-image description method. Deterministic CV facts remain authoritative.
 
@@ -46,6 +49,12 @@ $env:DDR_DATABASE_URL = "postgresql+psycopg://..."
 ```
 
 The command refuses a target that already contains documents and records the applied seed version. It never runs during app startup.
+
+## Grounded chat scope
+
+Chat answers only from the processed DDR corpus. It searches bounded chunks from report summaries, narrative sections, operations, extracted values, optional table rows, equipment failures, and deterministic plot facts. Word and character TF-IDF ranking is portable across SQLite and PostgreSQL, includes drilling-domain synonyms, and uses a second relaxed pass before returning “not found in corpus.”
+
+Trusted handlers retain deterministic SQL for summaries, report lookups, activity aggregation, failures, plots, and verified mappings. Up to four recent conversational messages may resolve references such as “that report” or “bunlardan ən sonuncusu”; history is never evidence. Every generated citation must name a supplied evidence source, and generated numbers must already exist in the evidence pack.
 
 ## Verification
 
