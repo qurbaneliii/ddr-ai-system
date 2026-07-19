@@ -24,13 +24,13 @@
 ## Acceptance evidence
 
 - Fresh editable install succeeded on Python 3.12.
-- Final local verification: 92 passed and 1 PostgreSQL-service test skipped; Ruff, mypy (53 source files), compileall, editable installation, database integrity/FK/count checks, and `git diff --check` passed. The PostgreSQL lifecycle test is expected to run rather than skip in CI.
+- Final local verification: 93 passed and 1 PostgreSQL-service test skipped; Ruff, mypy (53 source files), compileall, editable installation, database integrity/FK/count checks, and `git diff --check` passed.
 - Local Streamlit health returned HTTP 200. Browser checks rendered Overview metrics, Report browser, Activities, candidate Trends, both pressure image/overlay tabs, one-action upload UI, lexical provider state, English plot citations/SQL/CSV, and an Azerbaijani grounded summary without app exceptions.
 - `docker compose config --quiet` passed. Docker runtime execution was not available because the local Docker Desktop Linux engine pipe was absent.
 
 ## Public deployment and external gate
 
-- The prior GitHub Actions run `29668478983` covered the pre-retrieval baseline. The final run will additionally exercise full PostgreSQL seed/reconnect and retrieval-chunk persistence; its URL and exact pass/skip result are recorded in the final delivery report.
+- GitHub Actions run `29671232570` passed with 85 tests passed and 9 explicitly corpus-dependent tests skipped. It exercised full PostgreSQL seed/reconnect and retrieval-chunk persistence; local and CI skips are intentionally reported separately.
 - The public deployment was verified on 2026-07-19 with the expected 1,060 sources, 1,000 reports, 10,983 operations, and 1,009 plot points. Report browsing, portable pressure source/overlay images, upload safeguards, and temporary-persistence labeling rendered without the former database exception.
 - The authorized production OpenAI configuration returned grounded English and Azerbaijani `gpt-5.6-luna` answers with deterministic citations and limitations. No key value was inspected or exposed.
 - Durable production uploads remain an external deployment gate: the public sidebar reports `temporary SQLite demo`, so an authorized PostgreSQL `DDR_DATABASE_URL` must still be configured, seeded, and restart-tested. Raw uploaded bytes also require separate object storage if their persistence is desired.
