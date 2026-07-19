@@ -25,6 +25,9 @@
 - Local Streamlit health returned HTTP 200. Browser checks rendered Overview metrics, Report browser, Activities, candidate Trends, both pressure image/overlay tabs, one-action upload UI, lexical provider state, English plot citations/SQL/CSV, and an Azerbaijani grounded summary without app exceptions.
 - `docker compose config --quiet` passed. Docker runtime execution was not available because the local Docker Desktop Linux engine pipe was absent.
 
-## External deployment gate
+## Public deployment and external gate
 
-The public deployment can operate as a validated SQLite demo without credentials. Durable production uploads and a real OpenAI response require manually authorized Streamlit Secrets (`DDR_DATABASE_URL` and optionally `OPENAI_API_KEY`). These secrets were not available locally and were neither read nor fabricated. Public deployment and GitHub CI are re-verified after the final push.
+- GitHub Actions run `29668478983` passed installation, hygiene, Ruff, mypy, tests, compile, SQLite integrity/revision, and the PostgreSQL migration on Python 3.12.
+- The public deployment was verified on 2026-07-19 with the expected 1,060 sources, 1,000 reports, 10,983 operations, and 1,009 plot points. Report browsing, portable pressure source/overlay images, upload safeguards, and temporary-persistence labeling rendered without the former database exception.
+- The authorized production OpenAI configuration returned grounded English and Azerbaijani `gpt-5.6-luna` answers with deterministic citations and limitations. No key value was inspected or exposed.
+- Durable production uploads remain an external deployment gate: the public sidebar reports `temporary SQLite demo`, so an authorized PostgreSQL `DDR_DATABASE_URL` must still be configured, seeded, and restart-tested. Raw uploaded bytes also require separate object storage if their persistence is desired.
