@@ -19,6 +19,9 @@ STREAMLIT_SECRET_KEYS = {
     "OPENAI_MAX_RETRIES",
     "OPENAI_MAX_OUTPUT_TOKENS",
     "OPENAI_VLM_ENABLED",
+    "OPENAI_VLM_MODEL",
+    "OPENAI_VLM_MAX_IMAGE_MB",
+    "OPENAI_VLM_MAX_PIXELS",
     "DDR_ASSET_STORAGE_BACKEND",
     "DDR_ASSET_DATABASE_MAX_MB",
 }
@@ -94,6 +97,24 @@ class Settings(BaseSettings):
     openai_vlm_enabled: bool = Field(
         default=False,
         validation_alias=AliasChoices("OPENAI_VLM_ENABLED", "DDR_OPENAI_VLM_ENABLED"),
+    )
+    openai_vlm_model: str = Field(
+        default="gpt-5.6-luna",
+        validation_alias=AliasChoices("OPENAI_VLM_MODEL", "DDR_OPENAI_VLM_MODEL"),
+    )
+    openai_vlm_max_image_mb: int = Field(
+        default=4,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices(
+            "OPENAI_VLM_MAX_IMAGE_MB", "DDR_OPENAI_VLM_MAX_IMAGE_MB"
+        ),
+    )
+    openai_vlm_max_pixels: int = Field(
+        default=12_000_000,
+        ge=100_000,
+        le=40_000_000,
+        validation_alias=AliasChoices("OPENAI_VLM_MAX_PIXELS", "DDR_OPENAI_VLM_MAX_PIXELS"),
     )
 
     def ensure_directories(self) -> None:

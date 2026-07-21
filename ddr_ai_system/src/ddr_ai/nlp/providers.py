@@ -50,6 +50,7 @@ class BaseLLMProvider(ABC):
     name: str
     mode_label: str
     model: str | None
+    supports_images: bool = False
 
     @abstractmethod
     def health_check(self, *, force: bool = False) -> ProviderHealth:
@@ -65,6 +66,10 @@ class BaseLLMProvider(ABC):
     ) -> ChatResult:
         """Generate one response."""
 
+    def describe_image(self, image_bytes: bytes, *, mime_type: str, prompt: str) -> ChatResult:
+        del image_bytes, mime_type, prompt
+        raise LLMProviderError("The active provider does not support image analysis.")
+
 
 @dataclass(slots=True)
 class LexicalFallbackProvider(BaseLLMProvider):
@@ -72,6 +77,7 @@ class LexicalFallbackProvider(BaseLLMProvider):
     name: str = "lexical_fallback"
     mode_label: str = "Lexical fallback"
     model: str | None = None
+    supports_images: bool = False
 
     def health_check(self, *, force: bool = False) -> ProviderHealth:
         del force
@@ -211,12 +217,12 @@ class OpenAIProvider(BaseLLMProvider):
     def describe_image(self, image_bytes: bytes, *, mime_type: str, prompt: str) -> ChatResult:
         if not self.settings.openai_vlm_enabled:
             raise OpenAIProviderError("Optional OpenAI image description is disabled.")
-        if len(image_bytes) > 4 * 1024 * 1024:
-            raise OpenAIProviderError("The selected image exceeds the 4 MB VLM limit.")
+        if len(image_bytes) > self.settings.openai_vlm_max_image_mb * 1024 * 1024:
+            raise OpenAIProviderError("The selected image exceeds the configured VLM limit.")
         data_url = f"data:{mime_type};base64,{base64.b64encode(image_bytes).decode('ascii')}"
         return self._create(
             {
-                "model": self.model,
+                "model": self.settings.openai_vlm_model or self.model,
                 "input": [
                     {
                         "role": "user",
@@ -229,6 +235,10 @@ class OpenAIProvider(BaseLLMProvider):
                 "max_output_tokens": min(self.settings.openai_max_output_tokens, 800),
             }
         )
+
+    @property
+    def supports_images(self) -> bool:
+        return self.settings.openai_vlm_enabled
 
 
 @dataclass(frozen=True, slots=True)
@@ -272,4 +282,8 @@ def provider_status(
         "last_request_success": health.last_request_success,
         "fallback_reason": selected.fallback_reason or health.reason,
         "external_proprietary_api_required": active_openai,
+        "vlm_enabled": bool(active_openai and selected.provider.supports_images),
+        "vlm_model": settings.openai_vlm_model
+        if active_openai and selected.provider.supports_images
+        else None,
     }

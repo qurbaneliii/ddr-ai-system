@@ -14,6 +14,7 @@ import plotly.express as px
 import streamlit as st
 from sqlalchemy import and_, func, select
 
+from ddr_ai.chat.multimodal import PlotContextError, load_plot_image_context
 from ddr_ai.chat.service import answer_question
 from ddr_ai.config import Settings
 from ddr_ai.db.models import (
@@ -602,6 +603,51 @@ def chat(database_url: str, settings: Settings, selection: ProviderSelection) ->
         if st.button("Clear chat"):
             st.session_state.chat_history = []
             st.rerun()
+    with session_scope(database_url) as session:
+        plot_choices = list(
+            session.execute(
+                select(Plot.id, Plot.plot_identifier, Plot.plot_type).order_by(
+                    Plot.plot_type, Plot.plot_identifier
+                )
+            )
+        )
+    selected_plot = st.selectbox(
+        "Optional plot context",
+        [None, *plot_choices],
+        format_func=lambda item: "No plot selected"
+        if item is None
+        else f"{item[1]} · {item[2]}",
+    )
+    image_selection = "source"
+    plot_context = None
+    if selected_plot is not None:
+        image_selection = st.radio(
+            "Image", ["source", "overlay"], horizontal=True, key="chat-plot-image-selection"
+        )
+        try:
+            with session_scope(database_url) as session:
+                plot_context = load_plot_image_context(
+                    session,
+                    int(selected_plot[0]),
+                    selection=image_selection,
+                    max_image_mb=settings.openai_vlm_max_image_mb,
+                    max_pixels=settings.openai_vlm_max_pixels,
+                )
+            st.image(
+                plot_context.image_bytes,
+                caption=f"{plot_context.plot_identifier} · {image_selection}",
+                width="stretch",
+            )
+            st.caption(
+                f"{plot_context.plot_type} · {plot_context.point_count} points · "
+                f"unit status {plot_context.unit_status} · "
+                f"VLM {'enabled' if status.get('vlm_enabled') else 'deterministic fallback'}"
+            )
+            if plot_context.warnings:
+                with st.expander("Selected plot warnings"):
+                    st.json(plot_context.warnings)
+        except PlotContextError as exc:
+            st.warning(str(exc))
     for index, message in enumerate(st.session_state.chat_history):
         render_chat_message(message, index)
     question = st.chat_input(
@@ -635,6 +681,7 @@ def chat(database_url: str, settings: Settings, selection: ProviderSelection) ->
                 provider=selection.provider,
                 language=language,
                 history=conversation_context,
+                plot_context=plot_context,
             )
         st.session_state.chat_history.append(
             {"role": "assistant", "content": answer.answer, **answer.to_dict()}
