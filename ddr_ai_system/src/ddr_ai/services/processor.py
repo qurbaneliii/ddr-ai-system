@@ -28,8 +28,8 @@ from ddr_ai.db.models import (
 )
 from ddr_ai.db.session import session_scope
 from ddr_ai.ingestion.router import AssetKind, route_asset
-from ddr_ai.pdf.ocr import BaseOCRBackend, parse_scanned_pdf
-from ddr_ai.pdf.parser import parse_ddr_pdf
+from ddr_ai.pdf.document import parse_document_pdf
+from ddr_ai.pdf.ocr import BaseOCRBackend
 from ddr_ai.plots import digitize_pressure_profile, digitize_pressure_time
 from ddr_ai.retrieval.corpus import replace_document_chunks
 from ddr_ai.services.asset_storage import persist_asset_record
@@ -357,13 +357,19 @@ def process_file(
         session.flush()
         try:
             with session.begin_nested():
-                if decision.kind == AssetKind.DIGITAL_PDF:
-                    _persist_report(session, source, parse_ddr_pdf(source_path))
-                elif decision.kind == AssetKind.SCANNED_PDF:
+                if decision.kind in {
+                    AssetKind.DIGITAL_PDF,
+                    AssetKind.SCANNED_PDF,
+                    AssetKind.HYBRID_PDF,
+                }:
                     _persist_report(
                         session,
                         source,
-                        parse_scanned_pdf(source_path, backend=ocr_backend),
+                        parse_document_pdf(
+                            source_path,
+                            decision=decision,
+                            ocr_backend=ocr_backend,
+                        ),
                     )
                 elif decision.kind == AssetKind.PRESSURE_PROFILE:
                     overlay = (

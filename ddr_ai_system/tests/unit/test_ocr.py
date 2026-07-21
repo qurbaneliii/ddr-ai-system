@@ -9,7 +9,8 @@ from sqlalchemy import select
 from ddr_ai.config import Settings
 from ddr_ai.db.models import Page
 from ddr_ai.db.session import session_scope, upgrade_schema
-from ddr_ai.pdf.ocr import BaseOCRBackend, OCRResult, parse_scanned_pdf
+from ddr_ai.pdf.ocr import BaseOCRBackend, OCRResult, OCRToken, parse_scanned_pdf
+from ddr_ai.pdf.ocr_tables import reconstruct_ddr_tables
 from ddr_ai.services.processor import process_file
 
 
@@ -75,3 +76,54 @@ def test_scanned_pdf_processing_route_persists_ocr_page(tmp_path: Path) -> None:
         assert page is not None
         assert page.extraction_method == "ocr"
         assert page.confidence == 0.91
+
+
+def _token(text: str, x: float, y: float, line: int) -> OCRToken:
+    return OCRToken(
+        text=text,
+        confidence=0.92,
+        x0=x,
+        y0=y,
+        x1=x + max(20, len(text) * 8),
+        y1=y + 16,
+        block=1,
+        paragraph=1,
+        line=line,
+        page_number=1,
+    )
+
+
+def test_ocr_operation_table_reconstruction_uses_layout_tokens() -> None:
+    tokens = (
+        _token("Start", 0, 10, 1),
+        _token("End", 90, 10, 1),
+        _token("Depth", 180, 10, 1),
+        _token("Activity", 300, 10, 1),
+        _token("State", 520, 10, 1),
+        _token("Remark", 640, 10, 1),
+        _token("08:00", 0, 40, 2),
+        _token("12:00", 90, 40, 2),
+        _token("1250", 180, 40, 2),
+        _token("drilling", 300, 40, 2),
+        _token("--", 390, 40, 2),
+        _token("drill", 420, 40, 2),
+        _token("ok", 520, 40, 2),
+        _token("Drilled", 640, 40, 2),
+        _token("ahead", 710, 40, 2),
+    )
+
+    structured = reconstruct_ddr_tables(
+        tokens,
+        "Operations",
+        page_number=1,
+        source_path="scan.pdf",
+    )
+
+    assert structured.table_count == 1
+    assert len(structured.operations) == 1
+    operation = structured.operations[0]
+    assert operation.main_activity_normalized == "drilling"
+    assert operation.sub_activity_normalized == "drill"
+    assert operation.duration_hours == 4.0
+    assert operation.bbox is not None
+    assert operation.raw_values["extraction_method"] == "ocr_layout"

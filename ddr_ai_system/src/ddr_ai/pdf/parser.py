@@ -106,56 +106,80 @@ def _parse_operation_tables(page_tables: list[list[Any]]) -> list[OperationExtra
             if not all(token in header for token in ("start", "end", "state", "remark")):
                 continue
             for table_row_index, row in enumerate(data[1:], start=1):
-                padded = list(row) + [None] * max(0, 6 - len(row))
-                start_raw = reconstruct_wrapped_cell(padded[0], compact=True)
-                end_raw = reconstruct_wrapped_cell(padded[1], compact=True)
-                if not start_raw and not end_raw:
-                    continue
-                activity = reconstruct_wrapped_cell(padded[3], compact=True) or ""
-                parts = re.split(r"\s*--\s*", activity, maxsplit=1)
-                main_raw = parts[0].strip() or None
-                sub_raw = parts[1].strip() if len(parts) > 1 else None
-                main_normalized, sub_normalized = normalize_activity(main_raw, sub_raw)
-                depth = normalize_number(reconstruct_wrapped_cell(padded[2], compact=True))
-                state_raw = reconstruct_wrapped_cell(padded[4], compact=True)
-                state_normalized = state_raw.casefold() if state_raw else None
-                operations.append(OperationExtraction(
+                operation = operation_from_cells(
+                    list(row),
                     row_index=row_index,
                     page_number=page_number,
-                    start_time_raw=start_raw,
-                    end_time_raw=end_raw,
-                    duration_hours=operation_duration_hours(start_raw, end_raw),
-                    end_depth_raw=depth.raw_value,
-                    end_depth_mmd=depth.value,
-                    end_depth_missing_reason=depth.missing_reason,
-                    main_activity_raw=main_raw,
-                    sub_activity_raw=sub_raw,
-                    main_activity_normalized=main_normalized,
-                    sub_activity_normalized=sub_normalized,
-                    state_raw=state_raw,
-                    state_normalized=state_normalized,
-                    remark=reconstruct_wrapped_cell(padded[5]),
-                    raw_values={
-                        "table_index": table_index,
-                        "table_row_index": table_row_index,
-                        "start_time": start_raw,
-                        "end_time": end_raw,
-                        "end_depth_mmd": depth.raw_value,
-                        "main_sub_activity": activity or None,
-                        "state": state_raw,
-                        "remark": reconstruct_wrapped_cell(padded[5]),
-                    },
-                    normalized_values={
-                        "end_depth_mmd": depth.value,
-                        "main_activity": main_normalized,
-                        "sub_activity": sub_normalized,
-                        "state": state_normalized,
-                    },
+                    table_index=table_index,
+                    table_row_index=table_row_index,
                     bbox=_row_bbox(table, table_row_index),
                     confidence=0.98,
-                ))
-                row_index += 1
+                )
+                if operation is not None:
+                    operations.append(operation)
+                    row_index += 1
     return operations
+
+
+def operation_from_cells(
+    row: list[str | None],
+    *,
+    row_index: int,
+    page_number: int,
+    table_index: int,
+    table_row_index: int,
+    bbox: tuple[float, float, float, float] | None = None,
+    confidence: float = 0.98,
+) -> OperationExtraction | None:
+    padded = list(row) + [None] * max(0, 6 - len(row))
+    start_raw = reconstruct_wrapped_cell(padded[0], compact=True)
+    end_raw = reconstruct_wrapped_cell(padded[1], compact=True)
+    if not start_raw and not end_raw:
+        return None
+    activity = reconstruct_wrapped_cell(padded[3], compact=True) or ""
+    parts = re.split(r"\s*--\s*", activity, maxsplit=1)
+    main_raw = parts[0].strip() or None
+    sub_raw = parts[1].strip() if len(parts) > 1 else None
+    main_normalized, sub_normalized = normalize_activity(main_raw, sub_raw)
+    depth = normalize_number(reconstruct_wrapped_cell(padded[2], compact=True))
+    state_raw = reconstruct_wrapped_cell(padded[4], compact=True)
+    state_normalized = state_raw.casefold() if state_raw else None
+    remark = reconstruct_wrapped_cell(padded[5])
+    return OperationExtraction(
+        row_index=row_index,
+        page_number=page_number,
+        start_time_raw=start_raw,
+        end_time_raw=end_raw,
+        duration_hours=operation_duration_hours(start_raw, end_raw),
+        end_depth_raw=depth.raw_value,
+        end_depth_mmd=depth.value,
+        end_depth_missing_reason=depth.missing_reason,
+        main_activity_raw=main_raw,
+        sub_activity_raw=sub_raw,
+        main_activity_normalized=main_normalized,
+        sub_activity_normalized=sub_normalized,
+        state_raw=state_raw,
+        state_normalized=state_normalized,
+        remark=remark,
+        raw_values={
+            "table_index": table_index,
+            "table_row_index": table_row_index,
+            "start_time": start_raw,
+            "end_time": end_raw,
+            "end_depth_mmd": depth.raw_value,
+            "main_sub_activity": activity or None,
+            "state": state_raw,
+            "remark": remark,
+        },
+        normalized_values={
+            "end_depth_mmd": depth.value,
+            "main_activity": main_normalized,
+            "sub_activity": sub_normalized,
+            "state": state_normalized,
+        },
+        bbox=bbox,
+        confidence=confidence,
+    )
 
 
 def _parse_equipment_failure_tables(page_tables: list[list[Any]]) -> list[EquipmentFailureExtraction]:
