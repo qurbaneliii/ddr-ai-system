@@ -4,15 +4,28 @@ import os
 from datetime import datetime
 from pathlib import Path
 
+import fitz
 import pytest
 from sqlalchemy import func, select
 
 from ddr_ai.chat.query import QueryAnalyzer
-from ddr_ai.db.models import Report, ReportSection, RetrievalChunk, SourceDocument
+from ddr_ai.config import Settings
+from ddr_ai.db.models import (
+    Anomaly,
+    AnomalyReview,
+    Report,
+    ReportSection,
+    RetrievalChunk,
+    SourceDocument,
+    StoredAsset,
+)
 from ddr_ai.db.seeding import seed_database
 from ddr_ai.db.session import dispose_engine, session_scope
 from ddr_ai.nlp.providers import LexicalFallbackProvider
 from ddr_ai.retrieval.corpus import CorpusRetriever, replace_document_chunks
+from ddr_ai.services.anomaly_reviews import add_anomaly_review
+from ddr_ai.services.asset_storage import load_persisted_asset
+from ddr_ai.services.processor import process_file
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMMITTED_DATABASE = PROJECT_ROOT / "data" / "processed" / "ddr_ai.db"
@@ -25,10 +38,25 @@ def _postgres_url() -> str:
     return value
 
 
-def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence() -> None:
+def _write_upload_pdf(path: Path) -> bytes:
+    document = fitz.open()
+    page = document.new_page()
+    page.insert_text(
+        (72, 72),
+        "DAILY DRILLING REPORT\nWellbore: 88/8-F-89\nReport date: 2026-01-03\n"
+        "Operations\n00:00 01:00 1.0 DRILLING ROTARY Drill ahead to 1200 m.",
+    )
+    document.save(path)
+    document.close()
+    return path.read_bytes()
+
+
+def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence(
+    tmp_path: Path,
+) -> None:
     target_url = _postgres_url()
     source_url = f"sqlite:///{COMMITTED_DATABASE.as_posix()}"
-    version = "committed-ddr-v0005"
+    version = "committed-ddr-v0006"
 
     first = seed_database(source_url, target_url, seed_version=version)
     second = seed_database(source_url, target_url, seed_version=version)
@@ -79,6 +107,44 @@ def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence() -> N
         inserted_chunks = replace_document_chunks(session, document.id)
         inserted_document_id = document.id
         assert inserted_chunks >= 2
+        candidate = session.scalar(
+            select(Anomaly).where(Anomaly.detector_type == "ml").order_by(Anomaly.id)
+        )
+        assert candidate is not None
+        review = add_anomaly_review(
+            session,
+            candidate.id,
+            decision="needs_more_evidence",
+            reviewer="postgres-integration-reviewer",
+            note="Reconnect persistence proof.",
+        )
+        inserted_review_id = review.id
+
+    upload_path = tmp_path / "restart-upload.pdf"
+    upload_bytes = _write_upload_pdf(upload_path)
+    settings = Settings(
+        database_url=target_url,
+        asset_storage_backend="database",
+        asset_database_max_mb=1,
+        _env_file=None,
+    )
+    processed = process_file(upload_path, database_url=target_url, settings=settings)
+    repeated = process_file(upload_path, database_url=target_url, settings=settings)
+    assert processed["status"] == "complete"
+    assert repeated["status"] == "skipped_unchanged"
+
+    with session_scope(target_url) as session:
+        uploaded = session.scalar(
+            select(SourceDocument).where(SourceDocument.sha256 == processed["sha256"])
+        )
+        assert uploaded is not None
+        uploaded_id = uploaded.id
+        stored = session.scalar(
+            select(StoredAsset).where(StoredAsset.source_document_id == uploaded_id)
+        )
+        assert stored is not None
+        assert stored.storage_status == "stored"
+        assert stored.content_bytes == upload_bytes
 
     dispose_engine(target_url)
 
@@ -86,6 +152,9 @@ def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence() -> N
         persisted = session.get(SourceDocument, inserted_document_id)
         assert persisted is not None
         assert persisted.file_name == "restart-persistence-fixture.pdf"
+        persisted_review = session.get(AnomalyReview, inserted_review_id)
+        assert persisted_review is not None
+        assert persisted_review.reviewer == "postgres-integration-reviewer"
         assert session.scalar(select(func.count(RetrievalChunk.id))) == original_chunks + inserted_chunks
         plan = QueryAnalyzer().analyze(
             "Which report contains ddrpersistmarker?",
@@ -96,3 +165,4 @@ def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence() -> N
         hits, diagnostics = CorpusRetriever().search(session, plan)
         assert diagnostics.evidence_hit_count > 0
         assert hits[0].file_name == "restart-persistence-fixture.pdf"
+        assert load_persisted_asset(session, uploaded_id) == upload_bytes

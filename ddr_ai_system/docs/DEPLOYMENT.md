@@ -2,29 +2,83 @@
 
 ## Streamlit Community Cloud
 
-1. Set the app entrypoint to `ddr_ai_system/streamlit_app.py`.
-2. In **Advanced settings**, select Python 3.12. Streamlit Community Cloud chooses Python in the deployment UI; `runtime.txt` is not used for this app.
-3. `requirements.txt` installs Python dependencies and `packages.txt` installs Tesseract.
-4. Add only authorized values to Streamlit Secrets. Do not commit `.streamlit/secrets.toml`.
+1. Repository: `qurbaneliii/ddr-ai-system`; branch: `main`; entrypoint: `ddr_ai_system/streamlit_app.py`.
+2. Select Python 3.12 in Advanced settings. `requirements.txt` installs Python packages and `packages.txt` installs Tesseract.
+3. Configure secrets only in Streamlit Secrets. Never commit `.streamlit/secrets.toml`, expose a database URL in the UI, or paste a credential into chat/PR text.
+4. Configure a persistent PostgreSQL database before claiming durable uploads.
 
-For a durable deployment, configure `DDR_DATABASE_URL` with a PostgreSQL-compatible URL and run `scripts/seed_production.py` once against the empty database. The seed includes retrieval chunks, verifies the source snapshot, refuses a non-empty target, records its version, and repairs PostgreSQL sequences. If that secret is absent, the public app remains a truthful SQLite demo: browsing and chat work, but newly uploaded records are temporary.
+Required production values:
 
-Extracted page text, normalized rows, provenance, mappings, hashes, processing jobs, and retrieval chunks persist in PostgreSQL. Raw uploaded bytes default to metadata-only status and can be unavailable after restart. For a small demo, `DDR_ASSET_STORAGE_BACKEND=database` stores only files at or below `DDR_ASSET_DATABASE_MAX_MB` (maximum 5 MB); larger files remain metadata-only. Use production object storage for general raw-file persistence.
+```toml
+DDR_DATABASE_URL = "postgresql+psycopg://..."
+DDR_ASSET_STORAGE_BACKEND = "database"
+DDR_ASSET_DATABASE_MAX_MB = 2
+DDR_BUILD_SHA = "<full-main-commit-sha>"
+LLM_PROVIDER = "openai"
+OPENAI_API_KEY = "" # set only through the Streamlit secret editor
+OPENAI_MODEL = "gpt-5.6-luna"
+OPENAI_VLM_ENABLED = true
+OPENAI_VLM_MODEL = "gpt-5.6-luna"
+```
 
-After configuring the authorized production URL:
+The OpenAI values are optional for deterministic/lexical operation. PostgreSQL and the database asset backend are required for live upload/restart compliance. If PostgreSQL is absent, the UI must say `temporary SQLite demo`.
 
-1. Run Alembic migrations and confirm the target contains no documents.
-2. Run the versioned seed exactly once and verify source/report/operation/retrieval-chunk counts.
-3. Redeploy, upload one small DDR, and confirm the resulting report and chunks are searchable.
-4. Restart/redeploy and repeat the search. Only then describe live upload persistence as verified.
+## Production database procedure
 
-CI performs this lifecycle against a dedicated PostgreSQL service database, including the full committed seed, a repeated no-op seed, non-empty-target refusal, sequence-generated IDs, upload insertion, engine disposal/reconnect, and retrieval after reconnect. CI evidence does not replace the separate live Streamlit secret/restart check.
+Use a secure operator environment; do not print the resolved URL.
+
+1. Verify a connection with a secret-safe success/failure check.
+2. Run `python -m alembic upgrade head` and confirm revision `0006`.
+3. Query only whether `source_documents` is empty.
+4. If and only if empty, run:
+
+   ```powershell
+   .\.venv\Scripts\python.exe scripts\seed_production.py `
+     --confirm-empty-target `
+     --seed-version committed-ddr-v0006
+   ```
+
+5. Verify 1,060 source documents, 1,000 reports, 10,983 operations, 60 plots, 1,009 points, 18,895 chunks, and seed version `committed-ddr-v0006`.
+6. Rerun the seed and require `already_applied`; never overwrite a non-empty target.
+7. Deploy current `main` with `DDR_BUILD_SHA` set to that commit.
+8. Upload one valid DDR below the configured asset limit. Verify report/sections/operations/chunks and a `stored_assets.storage_status='stored'` row with non-null bytes.
+9. Query a unique uploaded evidence marker.
+10. Restart/redeploy, verify the visible SHA/mode again, query the marker again, and load/hash-check the stored bytes.
+
+Only after step 10 may live persistence be called complete.
+
+## Asset policy
+
+- The default backend is the bounded SQL `database` backend.
+- A non-ZIP upload larger than `DDR_ASSET_DATABASE_MAX_MB` is rejected before processing. Extracted ZIP members meet the same processing policy.
+- Stored content is verified by size and SHA-256; PDFs require a PDF signature and images must decode within pixel limits.
+- The 1–5 MB limit is suitable for the take-home demo. General large-file production use should add an explicitly authorized object store rather than silently retaining metadata only.
+
+## Build and provider parity
+
+The public sidebar **Build & runtime** panel must show:
+
+- build SHA equal to GitHub `main`;
+- parser `0.3.0`;
+- schema `0006`;
+- `persistent PostgreSQL` for the final production acceptance;
+- active seed/model versions;
+- truthful LLM mode/model and VLM state.
+
+If the SHA is old, the deployment is incomplete even when the URL returns HTTP 200.
 
 ## Docker
 
 ```powershell
+docker compose config --quiet
 docker compose up --build app
 docker compose --profile postgres up --build
 ```
 
-The default app uses SQLite. The optional profile starts PostgreSQL; supply `DDR_DATABASE_URL` to the app deliberately. Compose contains no model server and exposes no provider secret.
+`docker compose config --quiet` validates configuration only. Run `docker info` before claiming runtime verification. The final local run could not reach Docker Desktop's Linux engine; no local container/PostgreSQL runtime claim is made.
+
+## Rollback
+
+- Application rollback: redeploy a known good `main` commit without changing database credentials.
+- Database migration downgrade should be used only after backup and explicit review; migration `0006` is compatible with SQLite and PostgreSQL.
+- Never reseed or delete a non-empty production database as a rollback mechanism.

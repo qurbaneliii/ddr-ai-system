@@ -10,6 +10,7 @@ from ddr_ai.chat.service import answer_question
 from ddr_ai.chat.sql_safety import validate_select_sql
 from ddr_ai.config import Settings
 from ddr_ai.db.models import (
+    Anomaly,
     Base,
     EquipmentFailure,
     FailureOperationMatch,
@@ -110,6 +111,51 @@ def test_lexical_fallback_is_explicit() -> None:
     assert status["active"] == "lexical_fallback"
     assert status["active_label"] == "Lexical fallback"
     assert status["external_proprietary_api_required"] is False
+
+
+def test_anomaly_chat_distinguishes_candidates_from_confirmed_facts() -> None:
+    db = session()
+    document, _ = seed(db)
+    db.add_all(
+        [
+            Anomaly(
+                source_document_id=document.id,
+                source_record_type="operation",
+                source_record_id=1,
+                category="unusual_operation_duration",
+                rule_or_model="isolation-forest-duration-v1",
+                detector_type="ml",
+                model_version="isolation-forest-duration-v1",
+                evidence_json={},
+                severity_heuristic="medium",
+                confidence=0.8,
+                explanation="Candidate only.",
+            ),
+            Anomaly(
+                source_document_id=document.id,
+                source_record_type="operation",
+                source_record_id=1,
+                category="operational_weak_signal",
+                rule_or_model="operation_repair",
+                detector_type="rule",
+                evidence_json={},
+                severity_heuristic="low",
+                confidence=0.7,
+                explanation="Candidate only.",
+            ),
+        ]
+    )
+    db.commit()
+
+    answer = answer_question(db, "Show unusual duration candidates and distinguish rule vs ML.")
+    assert answer.route == "anomaly_candidates"
+    assert {row["detector_type"] for row in answer.rows} == {"ml", "rule"}
+    assert "candidates, not confirmed incidents" in answer.answer
+
+    validated = answer_question(db, "Show confirmed validated anomaly candidates.")
+    assert validated.route == "anomaly_candidates"
+    assert validated.rows == []
+    assert "No human-confirmed anomaly" in validated.answer
 
 
 def test_azerbaijani_equipment_failure_question_is_grounded() -> None:

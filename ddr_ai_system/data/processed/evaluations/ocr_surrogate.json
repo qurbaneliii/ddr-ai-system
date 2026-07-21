@@ -1,0 +1,220 @@
+{
+  "evaluation_name": "ddr_ocr_surrogate_robustness",
+  "timestamp": "2026-07-21T03:41:30.273318+00:00",
+  "git_sha": "51082a4",
+  "parser_version": "0.3.0",
+  "model_version": "rapidocr-onnxruntime",
+  "data_fingerprint": "2e4c4117a816f205712817ce844aa0fe1d48b36b3f379c1d2897cc148c3cf7d8",
+  "sample_count": 3,
+  "parameters": {
+    "benchmark_type": "surrogate_native_pages_rasterized_to_image_only_pdf",
+    "real_scanned_inputs": false,
+    "backend": "rapidocr-onnxruntime",
+    "dpi": 150,
+    "predeclared_targets": {
+      "routing_accuracy": {
+        "operator": ">=",
+        "value": 0.9
+      },
+      "page_method_accuracy": {
+        "operator": ">=",
+        "value": 0.9
+      },
+      "token_f1": {
+        "operator": ">=",
+        "value": 0.75
+      },
+      "word_error_rate": {
+        "operator": "<=",
+        "value": 0.25
+      },
+      "wellbore_exact_match": {
+        "operator": ">=",
+        "value": 0.8
+      },
+      "date_exact_match": {
+        "operator": ">=",
+        "value": 0.8
+      },
+      "section_recall": {
+        "operator": ">=",
+        "value": 0.75
+      },
+      "operation_row_recall": {
+        "operator": ">=",
+        "value": 0.7
+      },
+      "equipment_failure_row_recall": {
+        "operator": ">=",
+        "value": 0.6
+      },
+      "selected_table_cell_accuracy": {
+        "operator": ">=",
+        "value": 0.7
+      },
+      "numeric_exact_match": {
+        "operator": ">=",
+        "value": 0.75
+      },
+      "failure_rate": {
+        "operator": "<=",
+        "value": 0.1
+      }
+    },
+    "selection": "deterministic mix of operation and equipment-failure reports"
+  },
+  "actual_metrics": {
+    "routing_accuracy": 1.0,
+    "page_method_accuracy": 1.0,
+    "token_precision": 0.8917166912020595,
+    "token_recall": 0.7929845243819835,
+    "token_f1": 0.8394116120335497,
+    "word_error_rate": 0.24485536347743153,
+    "wellbore_exact_match": 0.0,
+    "date_exact_match": 0.0,
+    "section_recall": 0.7833333333333333,
+    "operation_row_recall": 0.158008658008658,
+    "equipment_failure_row_recall": 0.0,
+    "selected_table_cell_accuracy": 0.09567901234567901,
+    "numeric_exact_match": 0.0,
+    "mean_confidence": 0.9642,
+    "processing_latency_seconds": 34.0722,
+    "failure_rate": 0.0,
+    "metric_sample_counts": {
+      "routing_accuracy": 3,
+      "page_method_accuracy": 3,
+      "token_precision": 3,
+      "token_recall": 3,
+      "token_f1": 3,
+      "word_error_rate": 3,
+      "wellbore_exact_match": 3,
+      "date_exact_match": 3,
+      "section_recall": 3,
+      "operation_row_recall": 3,
+      "equipment_failure_row_recall": 1,
+      "selected_table_cell_accuracy": 3,
+      "numeric_exact_match": 3,
+      "mean_confidence": 3,
+      "processing_latency_seconds": 3,
+      "failure_rate": 3
+    }
+  },
+  "target_results": {
+    "routing_accuracy": true,
+    "page_method_accuracy": true,
+    "token_f1": true,
+    "word_error_rate": true,
+    "wellbore_exact_match": false,
+    "date_exact_match": false,
+    "section_recall": true,
+    "operation_row_recall": false,
+    "equipment_failure_row_recall": false,
+    "selected_table_cell_accuracy": false,
+    "numeric_exact_match": false,
+    "failure_rate": true
+  },
+  "samples": [
+    {
+      "source_id": "2",
+      "sample_id": "surrogate-2-p1",
+      "file_name": "15_9_F_14_2008_06_14.pdf",
+      "page_number": 1,
+      "ground_truth_type": "native_parser_derived_surrogate",
+      "expected_text_available": 1,
+      "expected_wellbore_available": 1,
+      "expected_date_available": 1,
+      "expected_section_count": 4,
+      "routing_accuracy": 1.0,
+      "page_method_accuracy": 1.0,
+      "token_precision": 0.8618181818181818,
+      "token_recall": 0.75,
+      "token_f1": 0.8020304568527918,
+      "word_error_rate": 0.3407172995780591,
+      "wellbore_exact_match": 0.0,
+      "date_exact_match": 0.0,
+      "section_recall": 1.0,
+      "operation_row_recall": 0.0,
+      "equipment_failure_row_recall": 1.0,
+      "selected_table_cell_accuracy": 0.0,
+      "numeric_exact_match": 0.0,
+      "mean_confidence": 0.959,
+      "processing_latency_seconds": 39.2441,
+      "expected_operation_rows": 17,
+      "actual_operation_rows": 0,
+      "expected_failure_rows": 0,
+      "actual_failure_rows": 0,
+      "expected_table_cell_count": 20,
+      "expected_numeric_count": 18
+    },
+    {
+      "source_id": "6",
+      "sample_id": "surrogate-6-p1",
+      "file_name": "15_9_19_A_1997_07_26.pdf",
+      "page_number": 1,
+      "ground_truth_type": "native_parser_derived_surrogate",
+      "expected_text_available": 1,
+      "expected_wellbore_available": 1,
+      "expected_date_available": 1,
+      "expected_section_count": 4,
+      "routing_accuracy": 1.0,
+      "page_method_accuracy": 1.0,
+      "token_precision": 0.9404761904761905,
+      "token_recall": 0.844017094017094,
+      "token_f1": 0.8896396396396397,
+      "word_error_rate": 0.16880341880341881,
+      "wellbore_exact_match": 0.0,
+      "date_exact_match": 0.0,
+      "section_recall": 0.75,
+      "operation_row_recall": 0.42857142857142855,
+      "equipment_failure_row_recall": 1.0,
+      "selected_table_cell_accuracy": 0.25,
+      "numeric_exact_match": 0.0,
+      "mean_confidence": 0.969,
+      "processing_latency_seconds": 24.8256,
+      "expected_operation_rows": 7,
+      "actual_operation_rows": 3,
+      "expected_failure_rows": 0,
+      "actual_failure_rows": 0,
+      "expected_table_cell_count": 12,
+      "expected_numeric_count": 11
+    },
+    {
+      "source_id": "384",
+      "sample_id": "surrogate-384-p1",
+      "file_name": "15_9_F_10_2009_04_12.pdf",
+      "page_number": 1,
+      "ground_truth_type": "native_parser_derived_surrogate",
+      "expected_text_available": 1,
+      "expected_wellbore_available": 1,
+      "expected_date_available": 1,
+      "expected_section_count": 5,
+      "routing_accuracy": 1.0,
+      "page_method_accuracy": 1.0,
+      "token_precision": 0.8728557013118062,
+      "token_recall": 0.7849364791288567,
+      "token_f1": 0.8265647396082179,
+      "word_error_rate": 0.2250453720508167,
+      "wellbore_exact_match": 0.0,
+      "date_exact_match": 0.0,
+      "section_recall": 0.6,
+      "operation_row_recall": 0.045454545454545456,
+      "equipment_failure_row_recall": 0.0,
+      "selected_table_cell_accuracy": 0.037037037037037035,
+      "numeric_exact_match": 0.0,
+      "mean_confidence": 0.9646,
+      "processing_latency_seconds": 38.1469,
+      "expected_operation_rows": 22,
+      "actual_operation_rows": 1,
+      "expected_failure_rows": 1,
+      "actual_failure_rows": 0,
+      "expected_table_cell_count": 27,
+      "expected_numeric_count": 21
+    }
+  ],
+  "failures": [],
+  "limitations": [
+    "This is a surrogate robustness benchmark, not a genuine scanned-DDR benchmark.",
+    "Ground truth is derived from native extraction rather than human annotation.",
+    "Real scanned-DDR validation remains blocked until genuine samples are authorized."
+  ]
+}

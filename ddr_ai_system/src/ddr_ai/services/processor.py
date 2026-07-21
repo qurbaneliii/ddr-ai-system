@@ -28,8 +28,9 @@ from ddr_ai.db.models import (
 )
 from ddr_ai.db.session import session_scope
 from ddr_ai.ingestion.router import AssetKind, route_asset
-from ddr_ai.pdf.ocr import BaseOCRBackend, parse_scanned_pdf
-from ddr_ai.pdf.parser import parse_ddr_pdf
+from ddr_ai.nlp.activity_classifier import enrich_operation_classifications
+from ddr_ai.pdf.document import parse_document_pdf
+from ddr_ai.pdf.ocr import BaseOCRBackend
 from ddr_ai.plots import digitize_pressure_profile, digitize_pressure_time
 from ddr_ai.retrieval.corpus import replace_document_chunks
 from ddr_ai.services.asset_storage import persist_asset_record
@@ -161,6 +162,10 @@ def _persist_report(session: Session, source: SourceDocument, parsed: Any) -> No
                 if item.bbox is None
                 else dict(zip(("x0", "top", "x1", "bottom"), item.bbox, strict=True)),
                 confidence=item.confidence,
+                classification_method=item.classification_method,
+                classification_confidence=item.classification_confidence,
+                classification_model_version=item.classification_model_version,
+                classification_evidence_json=item.classification_evidence,
             )
         )
     session.flush()
@@ -338,6 +343,17 @@ def process_file(
     if not source_path.is_absolute():
         source_path = PROJECT_ROOT / source_path
     source_path = source_path.resolve()
+    if (
+        settings.asset_storage_backend.casefold().strip() == "database"
+        and source_path.stat().st_size > settings.asset_database_max_mb * 1024 * 1024
+    ):
+        return {
+            "path": str(source_path),
+            "status": "rejected_persistence_size_limit",
+            "sha256": sha256_file(source_path),
+            "duration_seconds": 0.0,
+            "error": None,
+        }
     decision = route_asset(source_path)
     digest = sha256_file(source_path)
     started = time.perf_counter()
@@ -346,6 +362,7 @@ def process_file(
             session, source_path, digest, decision.kind.value, settings
         )
         if unchanged:
+            persist_asset_record(session, source, source_path, settings)
             return {"path": str(source_path), "status": "skipped_unchanged", "sha256": digest}
         job = ProcessingJob(
             source_document_id=source.id,
@@ -357,13 +374,22 @@ def process_file(
         session.flush()
         try:
             with session.begin_nested():
-                if decision.kind == AssetKind.DIGITAL_PDF:
-                    _persist_report(session, source, parse_ddr_pdf(source_path))
-                elif decision.kind == AssetKind.SCANNED_PDF:
+                if decision.kind in {
+                    AssetKind.DIGITAL_PDF,
+                    AssetKind.SCANNED_PDF,
+                    AssetKind.HYBRID_PDF,
+                }:
+                    parsed_report = enrich_operation_classifications(
+                        parse_document_pdf(
+                            source_path,
+                            decision=decision,
+                            ocr_backend=ocr_backend,
+                        )
+                    )
                     _persist_report(
                         session,
                         source,
-                        parse_scanned_pdf(source_path, backend=ocr_backend),
+                        parsed_report,
                     )
                 elif decision.kind == AssetKind.PRESSURE_PROFILE:
                     overlay = (

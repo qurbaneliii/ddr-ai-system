@@ -48,6 +48,9 @@ jobs:
             echo "Forbidden generated or secret-bearing path is tracked."
             exit 1
           fi
+          git diff --check
+      - name: Docker Compose configuration
+        run: docker compose config --quiet
       - name: Ruff
         run: python -m ruff check .
       - name: Mypy
@@ -61,6 +64,12 @@ jobs:
         env:
           DDR_TEST_POSTGRES_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ddr_seed_test
         run: python -m pytest -o addopts="" -q
+      - name: Deterministic evaluation contracts
+        run: |
+          python scripts/evaluate_activity_classifier.py
+          python scripts/generate_ml_anomalies.py --dry-run
+          python scripts/evaluate_chat.py
+          python -c "import json, pathlib; root=pathlib.Path('data/processed/evaluations'); required={'evaluation_name','timestamp','git_sha','parser_version','model_version','data_fingerprint','sample_count','parameters','actual_metrics','limitations'}; files=['activity_classifier.json','anomaly_model.json','chat.json']; assert all(required <= set(json.loads((root/name).read_text())) for name in files)"
       - name: Compile
         run: python -m compileall -q src streamlit_app.py
       - name: SQLite integrity and revision
@@ -68,7 +77,7 @@ jobs:
           python -c "import sqlite3; c=sqlite3.connect('data/processed/ddr_ai.db');
           assert c.execute('pragma integrity_check').fetchone()==('ok',);
           assert c.execute('pragma foreign_key_check').fetchall()==[];
-          assert c.execute('select version_num from alembic_version').fetchone()==('0005',)"
+          assert c.execute('select version_num from alembic_version').fetchone()==('0006',)"
       - name: PostgreSQL migration
         env:
           DDR_DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/ddr_ci

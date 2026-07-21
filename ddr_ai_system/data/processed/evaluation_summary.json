@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-07-19T00:43:45.753079+00:00",
+  "generated_at": "2026-07-21T03:29:22.367307+00:00",
   "processing": {
     "statuses": {
       "complete": 1060
@@ -44,7 +44,19 @@
     },
     "independent_text_sentinel_occurrences": 4025,
     "normalized_sentinel_records": 5374,
-    "normalized_optional_section_sentinel_cells": 3511
+    "normalized_optional_section_sentinel_cells": 3511,
+    "classification_methods": {
+      "source_rule": 10983
+    },
+    "canonical_main_activities": {
+      "completion": 647,
+      "drilling": 5206,
+      "formation_evaluation": 620,
+      "interruption": 1940,
+      "moving": 127,
+      "plug_abandon": 1634,
+      "workover": 809
+    }
   },
   "pressure_profiles": {
     "plots": 30,
@@ -135,9 +147,10 @@
     "legend_markers_excluded": 120,
     "unknown_unit_images": 30
   },
-  "anomaly_candidates": 1291,
+  "anomaly_candidates": 1482,
   "anomaly_candidates_by_rule": {
     "equipment_failure_section_present": 148,
+    "isolation_forest_duration": 191,
     "operation_lost_circulation": 65,
     "operation_repair": 502,
     "operation_state_fail": 480,
@@ -145,6 +158,17 @@
     "period_precedes_spud_date": 45,
     "pixel_curve_relative_position": 8
   },
+  "anomaly_candidates_by_detector": {
+    "data_quality": 45,
+    "ml": 191,
+    "rule": 1246
+  },
+  "anomaly_validation_statuses": {
+    "unreviewed": 1482
+  },
+  "anomaly_reviews": 0,
+  "stored_asset_statuses": {},
+  "database_revision": "0006",
   "interpretation": {
     "status": "candidate_level",
     "domain_validated": false,

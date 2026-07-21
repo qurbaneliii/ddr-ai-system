@@ -12,12 +12,15 @@ from typing import Any
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 
+from ddr_ai.analytics.trends import TrendObservation, compatible_parameter_trend
+from ddr_ai.chat.multimodal import PlotContextError, load_plot_image_context
 from ddr_ai.chat.service import answer_question
 from ddr_ai.config import Settings
 from ddr_ai.db.models import (
     Anomaly,
+    ExtractedValue,
     IdentityMapping,
     Operation,
     Plot,
@@ -32,6 +35,7 @@ from ddr_ai.db.models import (
 from ddr_ai.db.session import session_scope
 from ddr_ai.ingestion.safe_zip import UnsafeArchiveError, inspect_zip, safe_extract_zip
 from ddr_ai.nlp.providers import ProviderSelection, provider_status
+from ddr_ai.services.anomaly_reviews import add_anomaly_review, review_history
 from ddr_ai.services.processor import process_file
 from ddr_ai.ui.components import header, render_chat_message, render_plot_images, safe_metric
 
@@ -58,7 +62,9 @@ def overview(database_url: str, settings: Settings) -> None:
     st.info(
         f"Persistence mode: {settings.persistence_mode}. "
         + (
-            "Extracted upload records persist across redeployments. Raw files require separate object storage."
+            "Extracted records and bounded accepted source bytes persist across redeployments."
+            if settings.is_postgres and settings.asset_storage_backend.casefold() == "database"
+            else "Extracted upload records persist; raw bytes require a persistent asset backend."
             if settings.is_postgres
             else "Uploads are processed into a temporary runtime snapshot and do not survive restart."
         )
@@ -188,13 +194,27 @@ def activities(database_url: str) -> None:
                 Operation.duration_hours,
                 Operation.state_normalized,
                 Operation.remark,
+                Operation.classification_method,
+                Operation.classification_confidence,
+                Operation.classification_model_version,
             )
             .join(Report, Report.id == Operation.report_id)
             .limit(5000)
         ).all()
     frame = pd.DataFrame(
         rows,
-        columns=["wellbore", "date", "activity", "sub_activity", "hours", "state", "remark"],
+        columns=[
+            "wellbore",
+            "date",
+            "activity",
+            "sub_activity",
+            "hours",
+            "state",
+            "remark",
+            "classification_method",
+            "classification_confidence",
+            "classification_model_version",
+        ],
     )
     if frame.empty:
         st.info("No operation rows are available.")
@@ -208,30 +228,197 @@ def activities(database_url: str) -> None:
 
 def trends(database_url: str) -> None:
     header("Trends and anomaly candidates", "Candidate-level signals requiring domain review")
+    with st.expander("Cross-day parameter trend", expanded=False):
+        with session_scope(database_url) as session:
+            parameter_choices = list(
+                session.scalars(
+                    select(ExtractedValue.field_name)
+                    .where(ExtractedValue.normalized_number.is_not(None))
+                    .distinct()
+                    .order_by(ExtractedValue.field_name)
+                )
+            )
+        if not parameter_choices:
+            st.info("No numeric extracted parameters are available.")
+        else:
+            parameter = st.selectbox("Parameter", parameter_choices, key="parameter-trend-field")
+            with session_scope(database_url) as session:
+                parameter_rows = session.execute(
+                    select(
+                        Report.wellbore,
+                        Report.period_end,
+                        Report.excluded_from_default_trends,
+                        ExtractedValue.normalized_number,
+                        ExtractedValue.unit_normalized,
+                        SourceDocument.file_name,
+                        ExtractedValue.page_number,
+                    )
+                    .select_from(ExtractedValue)
+                    .join(Report, Report.source_document_id == ExtractedValue.source_document_id)
+                    .join(SourceDocument, SourceDocument.id == ExtractedValue.source_document_id)
+                    .where(ExtractedValue.field_name == parameter)
+                    .order_by(Report.period_end)
+                    .limit(20_000)
+                ).all()
+            wells = ["all", *sorted({str(row[0]) for row in parameter_rows if row[0]})]
+            selected_well = st.selectbox("Wellbore", wells, key="parameter-trend-well")
+            selected_rows = [
+                row for row in parameter_rows if selected_well == "all" or row[0] == selected_well
+            ]
+            observations = [
+                TrendObservation(
+                    observed_at=row[1],
+                    value=row[3],
+                    unit=row[4],
+                    included=not row[2],
+                    exclusion_reason="data_quality_exclusion" if row[2] else None,
+                )
+                for row in selected_rows
+            ]
+            result = compatible_parameter_trend(observations)
+            st.json(result)
+            if result.get("applicable"):
+                chart_rows = pd.DataFrame(
+                    [
+                        {"wellbore": row[0], "date": row[1], "value": row[3], "unit": row[4]}
+                        for row in selected_rows
+                        if row[1] is not None and row[3] is not None and not row[2]
+                    ]
+                )
+                st.plotly_chart(
+                    px.line(chart_rows, x="date", y="value", color="wellbore", markers=True),
+                    use_container_width=True,
+                )
+            else:
+                st.warning(str(result.get("reason")))
+            st.caption(
+                "Descriptive Theil-Sen/Spearman trend only; mixed or unknown units and "
+                "data-quality-excluded reports are not combined."
+            )
     with session_scope(database_url) as session:
         rows = session.execute(
             select(
-                Anomaly.category,
-                Anomaly.rule_or_model,
-                Anomaly.severity_heuristic,
-                Anomaly.confidence,
-                Anomaly.domain_validated,
-                Anomaly.explanation,
-            ).limit(5000)
+                Anomaly,
+                SourceDocument.file_name,
+                Report.wellbore,
+                Report.period_end,
+                Operation.main_activity_normalized,
+            )
+            .outerjoin(SourceDocument, SourceDocument.id == Anomaly.source_document_id)
+            .outerjoin(
+                Operation,
+                and_(
+                    Anomaly.source_record_type == "operation",
+                    Operation.id == Anomaly.source_record_id,
+                ),
+            )
+            .outerjoin(Report, Report.id == Operation.report_id)
+            .order_by(Anomaly.id.desc())
+            .limit(5000)
         ).all()
     frame = pd.DataFrame(
-        rows,
-        columns=["category", "rule", "severity", "confidence", "domain_validated", "explanation"],
+        [
+            {
+                "id": anomaly.id,
+                "wellbore": wellbore,
+                "date": period_end,
+                "activity": activity,
+                "category": anomaly.category,
+                "detector_type": anomaly.detector_type,
+                "rule_or_model": anomaly.rule_or_model,
+                "model_version": anomaly.model_version,
+                "score": anomaly.score,
+                "severity": anomaly.severity_heuristic,
+                "confidence": anomaly.confidence,
+                "validation_status": anomaly.validation_status,
+                "domain_validated": anomaly.domain_validated,
+                "source_record": f"{anomaly.source_record_type}:{anomaly.source_record_id}",
+                "source_file": file_name,
+                "explanation": anomaly.explanation,
+                "evidence": anomaly.evidence_json,
+            }
+            for anomaly, file_name, wellbore, period_end, activity in rows
+        ]
     )
     if frame.empty:
         st.info("No anomaly candidates are available.")
         return
     st.warning("Automated anomalies are candidates, not confirmed incidents.")
+    filter_columns = st.columns(4)
+    filtered = frame
+    for column, field, label in (
+        (filter_columns[0], "detector_type", "Detector"),
+        (filter_columns[1], "severity", "Severity"),
+        (filter_columns[2], "validation_status", "Review status"),
+        (filter_columns[3], "category", "Category"),
+    ):
+        values = ["all", *sorted(str(item) for item in frame[field].dropna().unique())]
+        selected = column.selectbox(label, values, key=f"anomaly-filter-{field}")
+        if selected != "all":
+            filtered = filtered[filtered[field].astype(str) == selected]
+    detail_columns = st.columns(2)
+    well_values = ["all", *sorted(str(item) for item in frame["wellbore"].dropna().unique())]
+    activity_values = ["all", *sorted(str(item) for item in frame["activity"].dropna().unique())]
+    selected_well = detail_columns[0].selectbox("Wellbore", well_values, key="anomaly-well")
+    selected_activity = detail_columns[1].selectbox(
+        "Activity", activity_values, key="anomaly-activity"
+    )
+    if selected_well != "all":
+        filtered = filtered[filtered["wellbore"].astype(str) == selected_well]
+    if selected_activity != "all":
+        filtered = filtered[filtered["activity"].astype(str) == selected_activity]
     chart = frame.groupby(["category", "severity"]).size().reset_index(name="count")
     st.plotly_chart(
         px.bar(chart, x="category", y="count", color="severity"), use_container_width=True
     )
-    st.dataframe(frame, hide_index=True, use_container_width=True, height=520)
+    st.dataframe(filtered, hide_index=True, use_container_width=True, height=520)
+    if filtered.empty:
+        return
+    selected_id = st.selectbox(
+        "Candidate to review",
+        [int(value) for value in filtered["id"].tolist()],
+        format_func=lambda value: f"#{value} · {frame.loc[frame['id'] == value, 'category'].iloc[0]}",
+    )
+    with st.expander("Record a domain review", expanded=False):
+        with st.form("anomaly-review-form", clear_on_submit=True):
+            decision = st.selectbox(
+                "Decision", ["confirmed", "rejected", "needs_more_evidence"]
+            )
+            reviewer = st.text_input("Reviewer")
+            note = st.text_area("Note (optional)")
+            submitted = st.form_submit_button("Save review", type="primary")
+        if submitted:
+            try:
+                with session_scope(database_url) as session:
+                    add_anomaly_review(
+                        session,
+                        selected_id,
+                        decision=decision,
+                        reviewer=reviewer,
+                        note=note,
+                    )
+                st.success("Append-only anomaly review saved.")
+                st.rerun()
+            except (ValueError, LookupError) as exc:
+                st.error(str(exc))
+        with session_scope(database_url) as session:
+            history = review_history(session, selected_id)
+        if history:
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "decision": item.decision,
+                            "reviewer": item.reviewer,
+                            "note": item.note,
+                            "created_at": item.created_at,
+                        }
+                        for item in history
+                    ]
+                ),
+                hide_index=True,
+                use_container_width=True,
+            )
 
 
 def plots(database_url: str) -> None:
@@ -391,7 +578,7 @@ def uploads(database_url: str, settings: Settings) -> None:
     else:
         st.info(
             f"PostgreSQL preserves extracted records; raw files up to {settings.asset_database_max_mb} MB "
-            "use the explicitly enabled bounded database asset store. Larger files remain metadata-only."
+            "use the bounded database asset store. Larger files are rejected before processing."
         )
     with st.form("upload-and-process", clear_on_submit=True):
         uploaded = st.file_uploader(
@@ -411,7 +598,12 @@ def uploads(database_url: str, settings: Settings) -> None:
                 candidates: list[Path] = []
                 for item in uploaded:
                     content = item.getvalue()
-                    if len(content) > settings.max_upload_mb * 1024 * 1024:
+                    upload_limit_mb = (
+                        settings.max_upload_mb
+                        if Path(item.name).suffix.casefold() == ".zip"
+                        else settings.persistent_upload_limit_mb
+                    )
+                    if len(content) > upload_limit_mb * 1024 * 1024:
                         results.append({"file": item.name, "status": "rejected_size_limit"})
                         continue
                     digest = hashlib.sha256(content).hexdigest()
@@ -501,6 +693,51 @@ def chat(database_url: str, settings: Settings, selection: ProviderSelection) ->
         if st.button("Clear chat"):
             st.session_state.chat_history = []
             st.rerun()
+    with session_scope(database_url) as session:
+        plot_choices = list(
+            session.execute(
+                select(Plot.id, Plot.plot_identifier, Plot.plot_type).order_by(
+                    Plot.plot_type, Plot.plot_identifier
+                )
+            )
+        )
+    selected_plot = st.selectbox(
+        "Optional plot context",
+        [None, *plot_choices],
+        format_func=lambda item: "No plot selected"
+        if item is None
+        else f"{item[1]} · {item[2]}",
+    )
+    image_selection = "source"
+    plot_context = None
+    if selected_plot is not None:
+        image_selection = st.radio(
+            "Image", ["source", "overlay"], horizontal=True, key="chat-plot-image-selection"
+        )
+        try:
+            with session_scope(database_url) as session:
+                plot_context = load_plot_image_context(
+                    session,
+                    int(selected_plot[0]),
+                    selection=image_selection,
+                    max_image_mb=settings.openai_vlm_max_image_mb,
+                    max_pixels=settings.openai_vlm_max_pixels,
+                )
+            st.image(
+                plot_context.image_bytes,
+                caption=f"{plot_context.plot_identifier} · {image_selection}",
+                width="stretch",
+            )
+            st.caption(
+                f"{plot_context.plot_type} · {plot_context.point_count} points · "
+                f"unit status {plot_context.unit_status} · "
+                f"VLM {'enabled' if status.get('vlm_enabled') else 'deterministic fallback'}"
+            )
+            if plot_context.warnings:
+                with st.expander("Selected plot warnings"):
+                    st.json(plot_context.warnings)
+        except PlotContextError as exc:
+            st.warning(str(exc))
     for index, message in enumerate(st.session_state.chat_history):
         render_chat_message(message, index)
     question = st.chat_input(
@@ -534,6 +771,7 @@ def chat(database_url: str, settings: Settings, selection: ProviderSelection) ->
                 provider=selection.provider,
                 language=language,
                 history=conversation_context,
+                plot_context=plot_context,
             )
         st.session_state.chat_history.append(
             {"role": "assistant", "content": answer.answer, **answer.to_dict()}

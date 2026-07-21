@@ -1,0 +1,319 @@
+{
+  "evaluation_name": "ddr_deterministic_chat_acceptance",
+  "timestamp": "2026-07-21T03:39:22.424084+00:00",
+  "git_sha": "51082a4",
+  "parser_version": "0.3.0",
+  "model_version": "deterministic-query-planner-and-lexical-retriever",
+  "data_fingerprint": "401b1c2560d75d04e531488eb3429568cdc52099f80a1b76baf0598cd05291fb",
+  "sample_count": 13,
+  "parameters": {
+    "provider": "Lexical fallback",
+    "external_model_calls": 0,
+    "corpus_counts": {
+      "source_documents": 1060,
+      "retrieval_chunks": 18895
+    },
+    "fixed_case_ids": [
+      "activity",
+      "equipment_failures",
+      "drilling_fluid",
+      "daily_summary",
+      "multi_day_plot_trend",
+      "azerbaijani",
+      "follow_up",
+      "missing_well",
+      "missing_date",
+      "current_oil_price_refusal",
+      "plot_facts",
+      "rule_vs_ml_candidates",
+      "validated_anomaly_wording"
+    ]
+  },
+  "actual_metrics": {
+    "passed_cases": 13,
+    "failed_cases": 0,
+    "pass_rate": 1.0,
+    "cases_with_evidence": 9,
+    "citation_file_validity_rate": 1.0,
+    "mean_latency_seconds": 0.7492072153844884,
+    "median_latency_seconds": 0.0454265000007581,
+    "max_latency_seconds": 8.817762999999104,
+    "routes": {
+      "anomaly_candidates": 2,
+      "corpus_retrieval": 2,
+      "hybrid_summary": 1,
+      "not_found_corpus": 3,
+      "plot_analytics": 1,
+      "plot_sql": 1,
+      "structured_failure_activity": 2,
+      "structured_report_lookup": 1
+    }
+  },
+  "cases": [
+    {
+      "case_id": "activity",
+      "passed": true,
+      "route": "corpus_retrieval",
+      "detected_language": "en",
+      "answer_type": "lexical corpus retrieval",
+      "evidence_count": 10,
+      "row_count": 10,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 8.8178
+    },
+    {
+      "case_id": "equipment_failures",
+      "passed": true,
+      "route": "structured_failure_activity",
+      "detected_language": "en",
+      "answer_type": "deterministic structured",
+      "evidence_count": 244,
+      "row_count": 244,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0865
+    },
+    {
+      "case_id": "drilling_fluid",
+      "passed": true,
+      "route": "corpus_retrieval",
+      "detected_language": "en",
+      "answer_type": "lexical corpus retrieval",
+      "evidence_count": 10,
+      "row_count": 10,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.3451
+    },
+    {
+      "case_id": "daily_summary",
+      "passed": true,
+      "route": "hybrid_summary",
+      "detected_language": "en",
+      "answer_type": "deterministic structured",
+      "evidence_count": 6,
+      "row_count": 1,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0453
+    },
+    {
+      "case_id": "multi_day_plot_trend",
+      "passed": true,
+      "route": "plot_analytics",
+      "detected_language": "en",
+      "answer_type": "deterministic structured",
+      "evidence_count": 1,
+      "row_count": 1,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0576
+    },
+    {
+      "case_id": "azerbaijani",
+      "passed": true,
+      "route": "structured_failure_activity",
+      "detected_language": "az",
+      "answer_type": "deterministic structured",
+      "evidence_count": 244,
+      "row_count": 244,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.1015
+    },
+    {
+      "case_id": "follow_up",
+      "passed": true,
+      "route": "structured_report_lookup",
+      "detected_language": "az",
+      "answer_type": "deterministic structured",
+      "evidence_count": 10,
+      "row_count": 10,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0563
+    },
+    {
+      "case_id": "missing_well",
+      "passed": true,
+      "route": "not_found_corpus",
+      "detected_language": "en",
+      "answer_type": "not found in corpus",
+      "evidence_count": 0,
+      "row_count": 0,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0361
+    },
+    {
+      "case_id": "missing_date",
+      "passed": true,
+      "route": "not_found_corpus",
+      "detected_language": "en",
+      "answer_type": "not found in corpus",
+      "evidence_count": 0,
+      "row_count": 0,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0449
+    },
+    {
+      "case_id": "current_oil_price_refusal",
+      "passed": true,
+      "route": "not_found_corpus",
+      "detected_language": "en",
+      "answer_type": "not found in corpus",
+      "evidence_count": 0,
+      "row_count": 0,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0343
+    },
+    {
+      "case_id": "plot_facts",
+      "passed": true,
+      "route": "plot_sql",
+      "detected_language": "en",
+      "answer_type": "deterministic structured",
+      "evidence_count": 7,
+      "row_count": 7,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0344
+    },
+    {
+      "case_id": "rule_vs_ml_candidates",
+      "passed": true,
+      "route": "anomaly_candidates",
+      "detected_language": "en",
+      "answer_type": "deterministic structured",
+      "evidence_count": 4,
+      "row_count": 4,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0454
+    },
+    {
+      "case_id": "validated_anomaly_wording",
+      "passed": true,
+      "route": "anomaly_candidates",
+      "detected_language": "en",
+      "answer_type": "deterministic structured",
+      "evidence_count": 0,
+      "row_count": 0,
+      "checks": {
+        "route": true,
+        "evidence": true,
+        "rows": true,
+        "language": true,
+        "answer_terms": true,
+        "follow_up_rewrite": true,
+        "corpus_boundary": true,
+        "citation_files": true
+      },
+      "latency_seconds": 0.0344
+    }
+  ],
+  "limitations": [
+    "This evaluation exercises deterministic planning, structured handlers, and lexical retrieval.",
+    "No OpenAI request is made; LLM verbalization quality is outside this CI-safe evaluation.",
+    "Candidate wording checks do not constitute domain validation."
+  ]
+}

@@ -19,7 +19,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         assert connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0005",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
         counts = {
             table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             for table in (
@@ -29,6 +29,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
                 "plots",
                 "plot_points",
                 "anomalies",
+                "anomaly_reviews",
                 "equipment_failures",
                 "failure_operation_matches",
                 "retrieval_chunks",
@@ -37,6 +38,9 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         matched = connection.execute(
             "SELECT COUNT(*) FROM failure_operation_matches WHERE match_status = 'exact'"
         ).fetchone()[0]
+        classified = connection.execute(
+            "SELECT COUNT(*) FROM operations WHERE classification_method = 'source_rule'"
+        ).fetchone()[0]
 
     assert counts == {
         "source_documents": 1060,
@@ -44,12 +48,21 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         "operations": 10983,
         "plots": 60,
         "plot_points": 1009,
-        "anomalies": 1291,
+        "anomalies": 1482,
+        "anomaly_reviews": 0,
         "equipment_failures": 244,
         "failure_operation_matches": 244,
         "retrieval_chunks": 18895,
     }
     assert matched == 242
+    assert classified == 10983
+    with sqlite3.connect(COMMITTED_DATABASE) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM anomalies WHERE detector_type = 'ml'"
+        ).fetchone() == (191,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM anomalies WHERE detector_type != 'ml'"
+        ).fetchone() == (1291,)
 
 
 def test_seed_database_is_explicit_and_idempotent(tmp_path: Path) -> None:

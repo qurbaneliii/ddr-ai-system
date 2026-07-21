@@ -19,8 +19,12 @@ STREAMLIT_SECRET_KEYS = {
     "OPENAI_MAX_RETRIES",
     "OPENAI_MAX_OUTPUT_TOKENS",
     "OPENAI_VLM_ENABLED",
+    "OPENAI_VLM_MODEL",
+    "OPENAI_VLM_MAX_IMAGE_MB",
+    "OPENAI_VLM_MAX_PIXELS",
     "DDR_ASSET_STORAGE_BACKEND",
     "DDR_ASSET_DATABASE_MAX_MB",
+    "DDR_BUILD_SHA",
 }
 
 
@@ -58,8 +62,12 @@ class Settings(BaseSettings):
     query_timeout_seconds: int = Field(default=10, ge=1, le=120)
     default_query_limit: int = Field(default=200, ge=1, le=1000)
     max_query_limit: int = Field(default=1000, ge=1, le=10000)
-    asset_storage_backend: str = Field(default="metadata_only")
+    asset_storage_backend: str = Field(default="database")
     asset_database_max_mb: int = Field(default=2, ge=1, le=5)
+    build_sha: str = Field(
+        default="",
+        validation_alias=AliasChoices("DDR_BUILD_SHA"),
+    )
 
     llm_provider: str = Field(
         default="openai",
@@ -95,6 +103,24 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("OPENAI_VLM_ENABLED", "DDR_OPENAI_VLM_ENABLED"),
     )
+    openai_vlm_model: str = Field(
+        default="gpt-5.6-luna",
+        validation_alias=AliasChoices("OPENAI_VLM_MODEL", "DDR_OPENAI_VLM_MODEL"),
+    )
+    openai_vlm_max_image_mb: int = Field(
+        default=4,
+        ge=1,
+        le=20,
+        validation_alias=AliasChoices(
+            "OPENAI_VLM_MAX_IMAGE_MB", "DDR_OPENAI_VLM_MAX_IMAGE_MB"
+        ),
+    )
+    openai_vlm_max_pixels: int = Field(
+        default=12_000_000,
+        ge=100_000,
+        le=40_000_000,
+        validation_alias=AliasChoices("OPENAI_VLM_MAX_PIXELS", "DDR_OPENAI_VLM_MAX_PIXELS"),
+    )
 
     def ensure_directories(self) -> None:
         for directory in (self.raw_dir, self.processed_dir, self.cache_dir):
@@ -107,6 +133,12 @@ class Settings(BaseSettings):
     @property
     def persistence_mode(self) -> str:
         return "persistent PostgreSQL" if self.is_postgres else "temporary SQLite demo"
+
+    @property
+    def persistent_upload_limit_mb(self) -> int:
+        if self.asset_storage_backend.casefold().strip() == "database":
+            return min(self.max_upload_mb, self.asset_database_max_mb)
+        return self.max_upload_mb
 
 
 def streamlit_secret_overrides(secrets: Mapping[str, Any]) -> dict[str, Any]:

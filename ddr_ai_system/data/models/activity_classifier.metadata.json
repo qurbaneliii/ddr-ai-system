@@ -1,0 +1,1024 @@
+{
+  "evaluation_name": "ddr_activity_classifier_grouped_holdout",
+  "timestamp": "2026-07-21T02:39:45.927110+00:00",
+  "git_sha": "d5b7559",
+  "parser_version": "0.3.0",
+  "model_version": "activity-tfidf-logreg-v1",
+  "data_fingerprint": "76caf81ada3e78a50127b7ea74da357e5ae495c92c110c8b86a095c0a319c50d",
+  "sample_count": 10654,
+  "source_operation_count": 10983,
+  "parameters": {
+    "random_state": 42,
+    "split": "StratifiedGroupKFold by report_id with deterministic group fallback",
+    "features": "word (1,2) and char_wb (3,5) TF-IDF",
+    "classifier": "class-weighted LogisticRegression",
+    "minimum_subactivity_support": 20
+  },
+  "actual_metrics": {
+    "main": {
+      "eligible_rows": 10654,
+      "train_rows": 8523,
+      "test_rows": 2131,
+      "eligible_classes": [
+        "completion",
+        "drilling",
+        "formation_evaluation",
+        "interruption",
+        "moving",
+        "plug_abandon",
+        "workover"
+      ],
+      "excluded_rare_classes": [],
+      "class_support": {
+        "completion": 643,
+        "drilling": 5095,
+        "formation_evaluation": 601,
+        "interruption": 1828,
+        "moving": 120,
+        "plug_abandon": 1584,
+        "workover": 783
+      },
+      "model": {
+        "accuracy": 0.7090567808540591,
+        "macro_f1": 0.706357350057307,
+        "weighted_f1": 0.713832956294509,
+        "per_class": {
+          "completion": {
+            "precision": 0.5493827160493827,
+            "recall": 0.689922480620155,
+            "f1": 0.6116838487972509,
+            "support": 129
+          },
+          "drilling": {
+            "precision": 0.8415051311288484,
+            "recall": 0.7242394504416094,
+            "f1": 0.7784810126582279,
+            "support": 1019
+          },
+          "formation_evaluation": {
+            "precision": 0.5733333333333334,
+            "recall": 0.7166666666666667,
+            "f1": 0.6370370370370371,
+            "support": 120
+          },
+          "interruption": {
+            "precision": 0.5530864197530864,
+            "recall": 0.6136986301369863,
+            "f1": 0.5818181818181818,
+            "support": 365
+          },
+          "moving": {
+            "precision": 0.7931034482758621,
+            "recall": 0.9583333333333334,
+            "f1": 0.8679245283018868,
+            "support": 24
+          },
+          "plug_abandon": {
+            "precision": 0.6495726495726496,
+            "recall": 0.7169811320754716,
+            "f1": 0.6816143497757847,
+            "support": 318
+          },
+          "workover": {
+            "precision": 0.7834394904458599,
+            "recall": 0.7884615384615384,
+            "f1": 0.7859424920127795,
+            "support": 156
+          }
+        },
+        "top_confusions": [
+          {
+            "actual": "drilling",
+            "predicted": "interruption",
+            "count": 129
+          },
+          {
+            "actual": "drilling",
+            "predicted": "plug_abandon",
+            "count": 67
+          },
+          {
+            "actual": "interruption",
+            "predicted": "drilling",
+            "count": 58
+          },
+          {
+            "actual": "drilling",
+            "predicted": "completion",
+            "count": 47
+          },
+          {
+            "actual": "interruption",
+            "predicted": "plug_abandon",
+            "count": 44
+          },
+          {
+            "actual": "plug_abandon",
+            "predicted": "drilling",
+            "count": 40
+          },
+          {
+            "actual": "drilling",
+            "predicted": "formation_evaluation",
+            "count": 31
+          },
+          {
+            "actual": "plug_abandon",
+            "predicted": "interruption",
+            "count": 28
+          },
+          {
+            "actual": "formation_evaluation",
+            "predicted": "drilling",
+            "count": 21
+          },
+          {
+            "actual": "interruption",
+            "predicted": "formation_evaluation",
+            "count": 18
+          },
+          {
+            "actual": "completion",
+            "predicted": "drilling",
+            "count": 16
+          },
+          {
+            "actual": "interruption",
+            "predicted": "completion",
+            "count": 12
+          },
+          {
+            "actual": "completion",
+            "predicted": "workover",
+            "count": 10
+          },
+          {
+            "actual": "plug_abandon",
+            "predicted": "workover",
+            "count": 9
+          },
+          {
+            "actual": "workover",
+            "predicted": "formation_evaluation",
+            "count": 9
+          },
+          {
+            "actual": "workover",
+            "predicted": "interruption",
+            "count": 9
+          },
+          {
+            "actual": "formation_evaluation",
+            "predicted": "interruption",
+            "count": 8
+          },
+          {
+            "actual": "interruption",
+            "predicted": "workover",
+            "count": 8
+          },
+          {
+            "actual": "completion",
+            "predicted": "interruption",
+            "count": 7
+          },
+          {
+            "actual": "workover",
+            "predicted": "completion",
+            "count": 7
+          }
+        ]
+      },
+      "remark_keyword_baseline": {
+        "accuracy": 0.4791177850774284,
+        "macro_f1": 0.10693509111976969,
+        "weighted_f1": 0.31556928666581574,
+        "per_class": {
+          "completion": {
+            "precision": 0.7777777777777778,
+            "recall": 0.05426356589147287,
+            "f1": 0.10144927536231885,
+            "support": 129
+          },
+          "drilling": {
+            "precision": 0.4794326241134752,
+            "recall": 0.9950932286555446,
+            "f1": 0.6470963624760689,
+            "support": 1019
+          },
+          "formation_evaluation": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 120
+          },
+          "interruption": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 365
+          },
+          "moving": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 24
+          },
+          "plug_abandon": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 318
+          },
+          "workover": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 156
+          }
+        },
+        "top_confusions": [
+          {
+            "actual": "interruption",
+            "predicted": "drilling",
+            "count": 363
+          },
+          {
+            "actual": "plug_abandon",
+            "predicted": "drilling",
+            "count": 317
+          },
+          {
+            "actual": "workover",
+            "predicted": "drilling",
+            "count": 155
+          },
+          {
+            "actual": "completion",
+            "predicted": "drilling",
+            "count": 122
+          },
+          {
+            "actual": "formation_evaluation",
+            "predicted": "drilling",
+            "count": 120
+          },
+          {
+            "actual": "moving",
+            "predicted": "drilling",
+            "count": 24
+          },
+          {
+            "actual": "drilling",
+            "predicted": "moving",
+            "count": 3
+          },
+          {
+            "actual": "drilling",
+            "predicted": "completion",
+            "count": 2
+          },
+          {
+            "actual": "interruption",
+            "predicted": "moving",
+            "count": 2
+          },
+          {
+            "actual": "plug_abandon",
+            "predicted": "moving",
+            "count": 1
+          },
+          {
+            "actual": "workover",
+            "predicted": "moving",
+            "count": 1
+          }
+        ]
+      },
+      "report_group_overlap": 0
+    },
+    "sub": {
+      "eligible_rows": 10592,
+      "train_rows": 8472,
+      "test_rows": 2120,
+      "eligible_classes": [
+        "anchor",
+        "bop_activities",
+        "bop_wellhead_equipment",
+        "casing",
+        "cement_plug",
+        "circulating_conditioning",
+        "completion_string",
+        "core",
+        "cut",
+        "drill",
+        "drill_stem_test",
+        "equipment_recovery",
+        "fish",
+        "log",
+        "lost_circulation",
+        "maintain",
+        "mechanical_plug",
+        "mill",
+        "other",
+        "perforate",
+        "ream",
+        "repair",
+        "rft_fit",
+        "rig_up_down",
+        "sidetrack",
+        "skid",
+        "survey",
+        "test_scsssv",
+        "trip",
+        "wait",
+        "waiting_on_weather",
+        "well_control",
+        "wireline"
+      ],
+      "excluded_rare_classes": [
+        "circulation_samples",
+        "hole_open",
+        "position",
+        "pressure_detection",
+        "squeeze",
+        "transit"
+      ],
+      "class_support": {
+        "anchor": 32,
+        "bop_activities": 131,
+        "bop_wellhead_equipment": 826,
+        "casing": 1745,
+        "cement_plug": 142,
+        "circulating_conditioning": 514,
+        "circulation_samples": 7,
+        "completion_string": 114,
+        "core": 20,
+        "cut": 184,
+        "drill": 1129,
+        "drill_stem_test": 80,
+        "equipment_recovery": 39,
+        "fish": 144,
+        "hole_open": 6,
+        "log": 123,
+        "lost_circulation": 75,
+        "maintain": 206,
+        "mechanical_plug": 68,
+        "mill": 45,
+        "other": 1633,
+        "perforate": 242,
+        "position": 16,
+        "pressure_detection": 7,
+        "ream": 71,
+        "repair": 342,
+        "rft_fit": 40,
+        "rig_up_down": 349,
+        "sidetrack": 194,
+        "skid": 53,
+        "squeeze": 7,
+        "survey": 64,
+        "test_scsssv": 26,
+        "transit": 19,
+        "trip": 1184,
+        "wait": 150,
+        "waiting_on_weather": 153,
+        "well_control": 29,
+        "wireline": 445
+      },
+      "model": {
+        "accuracy": 0.5306603773584906,
+        "macro_f1": 0.5100055849086024,
+        "weighted_f1": 0.5292359037977928,
+        "per_class": {
+          "anchor": {
+            "precision": 0.6666666666666666,
+            "recall": 1.0,
+            "f1": 0.8,
+            "support": 6
+          },
+          "bop_activities": {
+            "precision": 0.41379310344827586,
+            "recall": 0.8571428571428571,
+            "f1": 0.5581395348837209,
+            "support": 28
+          },
+          "bop_wellhead_equipment": {
+            "precision": 0.6746987951807228,
+            "recall": 0.6787878787878788,
+            "f1": 0.676737160120846,
+            "support": 165
+          },
+          "casing": {
+            "precision": 0.746268656716418,
+            "recall": 0.5747126436781609,
+            "f1": 0.6493506493506493,
+            "support": 348
+          },
+          "cement_plug": {
+            "precision": 0.2542372881355932,
+            "recall": 0.5555555555555556,
+            "f1": 0.3488372093023256,
+            "support": 27
+          },
+          "circulating_conditioning": {
+            "precision": 0.4263565891472868,
+            "recall": 0.5339805825242718,
+            "f1": 0.47413793103448276,
+            "support": 103
+          },
+          "completion_string": {
+            "precision": 0.53125,
+            "recall": 0.7391304347826086,
+            "f1": 0.6181818181818182,
+            "support": 23
+          },
+          "core": {
+            "precision": 0.75,
+            "recall": 0.75,
+            "f1": 0.75,
+            "support": 4
+          },
+          "cut": {
+            "precision": 0.41935483870967744,
+            "recall": 0.5652173913043478,
+            "f1": 0.48148148148148145,
+            "support": 46
+          },
+          "drill": {
+            "precision": 0.7368421052631579,
+            "recall": 0.56,
+            "f1": 0.6363636363636364,
+            "support": 225
+          },
+          "drill_stem_test": {
+            "precision": 0.7058823529411765,
+            "recall": 0.75,
+            "f1": 0.7272727272727273,
+            "support": 16
+          },
+          "equipment_recovery": {
+            "precision": 0.2,
+            "recall": 1.0,
+            "f1": 0.3333333333333333,
+            "support": 4
+          },
+          "fish": {
+            "precision": 0.3333333333333333,
+            "recall": 0.41379310344827586,
+            "f1": 0.36923076923076925,
+            "support": 29
+          },
+          "log": {
+            "precision": 0.5454545454545454,
+            "recall": 0.782608695652174,
+            "f1": 0.6428571428571429,
+            "support": 23
+          },
+          "lost_circulation": {
+            "precision": 0.15384615384615385,
+            "recall": 0.25,
+            "f1": 0.19047619047619047,
+            "support": 16
+          },
+          "maintain": {
+            "precision": 0.2236842105263158,
+            "recall": 0.4146341463414634,
+            "f1": 0.2905982905982906,
+            "support": 41
+          },
+          "mechanical_plug": {
+            "precision": 0.2413793103448276,
+            "recall": 0.5384615384615384,
+            "f1": 0.3333333333333333,
+            "support": 13
+          },
+          "mill": {
+            "precision": 0.625,
+            "recall": 0.5555555555555556,
+            "f1": 0.5882352941176471,
+            "support": 9
+          },
+          "other": {
+            "precision": 0.5470085470085471,
+            "recall": 0.19631901840490798,
+            "f1": 0.28893905191873587,
+            "support": 326
+          },
+          "perforate": {
+            "precision": 0.7142857142857143,
+            "recall": 0.6122448979591837,
+            "f1": 0.6593406593406593,
+            "support": 49
+          },
+          "ream": {
+            "precision": 0.38461538461538464,
+            "recall": 0.7142857142857143,
+            "f1": 0.5,
+            "support": 14
+          },
+          "repair": {
+            "precision": 0.3333333333333333,
+            "recall": 0.3088235294117647,
+            "f1": 0.32061068702290074,
+            "support": 68
+          },
+          "rft_fit": {
+            "precision": 0.47058823529411764,
+            "recall": 1.0,
+            "f1": 0.64,
+            "support": 8
+          },
+          "rig_up_down": {
+            "precision": 0.5,
+            "recall": 0.6666666666666666,
+            "f1": 0.5714285714285714,
+            "support": 69
+          },
+          "sidetrack": {
+            "precision": 0.375,
+            "recall": 0.631578947368421,
+            "f1": 0.47058823529411764,
+            "support": 38
+          },
+          "skid": {
+            "precision": 0.8333333333333334,
+            "recall": 0.9090909090909091,
+            "f1": 0.8695652173913043,
+            "support": 11
+          },
+          "survey": {
+            "precision": 0.2916666666666667,
+            "recall": 0.5833333333333334,
+            "f1": 0.3888888888888889,
+            "support": 12
+          },
+          "test_scsssv": {
+            "precision": 0.13636363636363635,
+            "recall": 0.75,
+            "f1": 0.23076923076923078,
+            "support": 4
+          },
+          "trip": {
+            "precision": 0.525691699604743,
+            "recall": 0.5564853556485355,
+            "f1": 0.540650406504065,
+            "support": 239
+          },
+          "wait": {
+            "precision": 0.35555555555555557,
+            "recall": 0.5333333333333333,
+            "f1": 0.4266666666666667,
+            "support": 30
+          },
+          "waiting_on_weather": {
+            "precision": 0.9523809523809523,
+            "recall": 0.6666666666666666,
+            "f1": 0.7843137254901961,
+            "support": 30
+          },
+          "well_control": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 4
+          },
+          "wireline": {
+            "precision": 0.5982905982905983,
+            "recall": 0.7608695652173914,
+            "f1": 0.6698564593301436,
+            "support": 92
+          }
+        },
+        "top_confusions": [
+          {
+            "actual": "other",
+            "predicted": "maintain",
+            "count": 40
+          },
+          {
+            "actual": "drill",
+            "predicted": "trip",
+            "count": 33
+          },
+          {
+            "actual": "other",
+            "predicted": "trip",
+            "count": 26
+          },
+          {
+            "actual": "drill",
+            "predicted": "circulating_conditioning",
+            "count": 24
+          },
+          {
+            "actual": "other",
+            "predicted": "bop_wellhead_equipment",
+            "count": 24
+          },
+          {
+            "actual": "casing",
+            "predicted": "cement_plug",
+            "count": 21
+          },
+          {
+            "actual": "casing",
+            "predicted": "circulating_conditioning",
+            "count": 15
+          },
+          {
+            "actual": "other",
+            "predicted": "wireline",
+            "count": 15
+          },
+          {
+            "actual": "bop_wellhead_equipment",
+            "predicted": "bop_activities",
+            "count": 14
+          },
+          {
+            "actual": "casing",
+            "predicted": "trip",
+            "count": 14
+          },
+          {
+            "actual": "other",
+            "predicted": "circulating_conditioning",
+            "count": 14
+          },
+          {
+            "actual": "trip",
+            "predicted": "casing",
+            "count": 14
+          },
+          {
+            "actual": "casing",
+            "predicted": "drill",
+            "count": 13
+          },
+          {
+            "actual": "other",
+            "predicted": "cut",
+            "count": 13
+          },
+          {
+            "actual": "other",
+            "predicted": "drill",
+            "count": 13
+          },
+          {
+            "actual": "other",
+            "predicted": "rig_up_down",
+            "count": 13
+          },
+          {
+            "actual": "other",
+            "predicted": "survey",
+            "count": 13
+          },
+          {
+            "actual": "trip",
+            "predicted": "drill",
+            "count": 13
+          },
+          {
+            "actual": "maintain",
+            "predicted": "other",
+            "count": 12
+          },
+          {
+            "actual": "other",
+            "predicted": "casing",
+            "count": 12
+          }
+        ]
+      },
+      "remark_keyword_baseline": {
+        "accuracy": 0.24150943396226415,
+        "macro_f1": 0.14229157085140207,
+        "weighted_f1": 0.15715505310488032,
+        "per_class": {
+          "anchor": {
+            "precision": 0.5,
+            "recall": 0.8333333333333334,
+            "f1": 0.625,
+            "support": 6
+          },
+          "bop_activities": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 28
+          },
+          "bop_wellhead_equipment": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 165
+          },
+          "casing": {
+            "precision": 0.2071629213483146,
+            "recall": 0.8477011494252874,
+            "f1": 0.3329571106094808,
+            "support": 348
+          },
+          "cement_plug": {
+            "precision": 0.6,
+            "recall": 0.1111111111111111,
+            "f1": 0.1875,
+            "support": 27
+          },
+          "circulating_conditioning": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 103
+          },
+          "completion_string": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 23
+          },
+          "core": {
+            "precision": 0.15789473684210525,
+            "recall": 0.75,
+            "f1": 0.2608695652173913,
+            "support": 4
+          },
+          "cut": {
+            "precision": 0.3076923076923077,
+            "recall": 0.34782608695652173,
+            "f1": 0.32653061224489793,
+            "support": 46
+          },
+          "drill": {
+            "precision": 0.41785714285714287,
+            "recall": 0.52,
+            "f1": 0.4633663366336634,
+            "support": 225
+          },
+          "drill_stem_test": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 16
+          },
+          "equipment_recovery": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 4
+          },
+          "fish": {
+            "precision": 0.2727272727272727,
+            "recall": 0.10344827586206896,
+            "f1": 0.15,
+            "support": 29
+          },
+          "log": {
+            "precision": 0.15151515151515152,
+            "recall": 0.21739130434782608,
+            "f1": 0.17857142857142858,
+            "support": 23
+          },
+          "lost_circulation": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 16
+          },
+          "maintain": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 41
+          },
+          "mechanical_plug": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 13
+          },
+          "mill": {
+            "precision": 0.16666666666666666,
+            "recall": 0.2222222222222222,
+            "f1": 0.19047619047619047,
+            "support": 9
+          },
+          "other": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 326
+          },
+          "perforate": {
+            "precision": 0.875,
+            "recall": 0.14285714285714285,
+            "f1": 0.24561403508771928,
+            "support": 49
+          },
+          "ream": {
+            "precision": 0.28205128205128205,
+            "recall": 0.7857142857142857,
+            "f1": 0.41509433962264153,
+            "support": 14
+          },
+          "repair": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 68
+          },
+          "rft_fit": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 8
+          },
+          "rig_up_down": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 69
+          },
+          "sidetrack": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 38
+          },
+          "skid": {
+            "precision": 0.3888888888888889,
+            "recall": 0.6363636363636364,
+            "f1": 0.4827586206896552,
+            "support": 11
+          },
+          "survey": {
+            "precision": 0.058823529411764705,
+            "recall": 0.16666666666666666,
+            "f1": 0.08695652173913043,
+            "support": 12
+          },
+          "test_scsssv": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 4
+          },
+          "trip": {
+            "precision": 0.38,
+            "recall": 0.0794979079497908,
+            "f1": 0.1314878892733564,
+            "support": 239
+          },
+          "wait": {
+            "precision": 0.27586206896551724,
+            "recall": 0.26666666666666666,
+            "f1": 0.2711864406779661,
+            "support": 30
+          },
+          "waiting_on_weather": {
+            "precision": 1.0,
+            "recall": 0.16666666666666666,
+            "f1": 0.2857142857142857,
+            "support": 30
+          },
+          "well_control": {
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "support": 4
+          },
+          "wireline": {
+            "precision": 0.10526315789473684,
+            "recall": 0.043478260869565216,
+            "f1": 0.06153846153846154,
+            "support": 92
+          }
+        },
+        "top_confusions": [
+          {
+            "actual": "other",
+            "predicted": "casing",
+            "count": 218
+          },
+          {
+            "actual": "trip",
+            "predicted": "casing",
+            "count": 149
+          },
+          {
+            "actual": "bop_wellhead_equipment",
+            "predicted": "casing",
+            "count": 142
+          },
+          {
+            "actual": "circulating_conditioning",
+            "predicted": "casing",
+            "count": 81
+          },
+          {
+            "actual": "drill",
+            "predicted": "casing",
+            "count": 76
+          },
+          {
+            "actual": "wireline",
+            "predicted": "casing",
+            "count": 62
+          },
+          {
+            "actual": "rig_up_down",
+            "predicted": "casing",
+            "count": 54
+          },
+          {
+            "actual": "repair",
+            "predicted": "casing",
+            "count": 52
+          },
+          {
+            "actual": "trip",
+            "predicted": "drill",
+            "count": 38
+          },
+          {
+            "actual": "perforate",
+            "predicted": "casing",
+            "count": 35
+          },
+          {
+            "actual": "other",
+            "predicted": "drill",
+            "count": 30
+          },
+          {
+            "actual": "maintain",
+            "predicted": "casing",
+            "count": 29
+          },
+          {
+            "actual": "bop_activities",
+            "predicted": "casing",
+            "count": 26
+          },
+          {
+            "actual": "casing",
+            "predicted": "drill",
+            "count": 26
+          },
+          {
+            "actual": "sidetrack",
+            "predicted": "casing",
+            "count": 22
+          },
+          {
+            "actual": "cement_plug",
+            "predicted": "casing",
+            "count": 21
+          },
+          {
+            "actual": "other",
+            "predicted": "cut",
+            "count": 21
+          },
+          {
+            "actual": "other",
+            "predicted": "repair",
+            "count": 21
+          },
+          {
+            "actual": "completion_string",
+            "predicted": "casing",
+            "count": 20
+          },
+          {
+            "actual": "drill",
+            "predicted": "survey",
+            "count": 20
+          }
+        ]
+      },
+      "report_group_overlap": 0
+    },
+    "promotion": {
+      "promoted": true,
+      "main_min_macro_f1": 0.5,
+      "sub_min_macro_f1": 0.25,
+      "must_beat_remark_keyword_baseline": true,
+      "main_passed": true,
+      "sub_passed": true
+    }
+  },
+  "thresholds": {
+    "main": 0.55,
+    "sub": 0.4
+  },
+  "artifact_sha256": "83a165342a245392499f8da44ca588d4e8fcb8121764d291cc963cc8ce8cdcf5",
+  "promoted": true,
+  "limitations": [
+    "Labels are source-derived and the model is a shadow/fallback classifier.",
+    "Rare subactivities remain source-only and are excluded from fallback prediction.",
+    "Metrics are report-grouped holdout results, not domain validation."
+  ]
+}

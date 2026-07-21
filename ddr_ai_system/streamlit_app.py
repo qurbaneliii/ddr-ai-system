@@ -13,6 +13,7 @@ SOURCE_ROOT = Path(__file__).resolve().parent / "src"
 if str(SOURCE_ROOT) not in sys.path:
     sys.path.insert(0, str(SOURCE_ROOT))
 
+from ddr_ai.build_info import collect_build_info
 from ddr_ai.config import resolve_settings, streamlit_secret_overrides
 from ddr_ai.db.bootstrap import DatabaseBootstrapError, prepare_runtime_database
 from ddr_ai.db.session import upgrade_schema
@@ -63,8 +64,20 @@ def main() -> None:
 
     st.sidebar.title("DDR Intelligence")
     page_name = st.sidebar.radio("Workspace", list(PAGES))
-    st.sidebar.caption(f"Parser {settings.parser_version}")
-    st.sidebar.caption(settings.persistence_mode)
+    build = collect_build_info(database_url, settings, selection)
+    with st.sidebar.expander("Build & runtime", expanded=False):
+        for label, value in (
+            ("Build", build.build_sha),
+            ("App", build.app_version),
+            ("Parser", build.parser_version),
+            ("Database", f"{build.database_mode} / schema {build.database_revision}"),
+            ("Seed", build.seed_version),
+            ("Activity model", build.activity_model_version),
+            ("Anomaly model", build.anomaly_model_version),
+            ("Language model", f"{build.llm_mode} / {build.llm_model}"),
+            ("Visual model", build.vlm_state),
+        ):
+            st.caption(f"{label}: {value}")
     page = PAGES[page_name]
     if page_name in {"Overview", "Upload & processing"}:
         page(database_url, settings)

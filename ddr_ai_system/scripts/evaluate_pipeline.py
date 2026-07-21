@@ -6,11 +6,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from ddr_ai.config import get_settings
 from ddr_ai.db.models import (
     Anomaly,
+    AnomalyReview,
     EquipmentFailure,
     ExtractedValue,
     FailureOperationMatch,
@@ -22,6 +23,7 @@ from ddr_ai.db.models import (
     ReportSection,
     SectionTableRow,
     SourceDocument,
+    StoredAsset,
 )
 from ddr_ai.db.session import session_scope
 
@@ -102,6 +104,21 @@ def collect(database_url: str) -> dict[str, Any]:
             .where(Plot.plot_type == "pressure_time")
         ).all()
         anomalies = session.scalar(select(func.count(Anomaly.id))) or 0
+        anomaly_detectors = dict(
+            session.execute(
+                select(Anomaly.detector_type, func.count(Anomaly.id)).group_by(
+                    Anomaly.detector_type
+                )
+            ).all()
+        )
+        anomaly_validation = dict(
+            session.execute(
+                select(Anomaly.validation_status, func.count(Anomaly.id)).group_by(
+                    Anomaly.validation_status
+                )
+            ).all()
+        )
+        anomaly_reviews = session.scalar(select(func.count(AnomalyReview.id))) or 0
         anomaly_rules = dict(
             session.execute(
                 select(Anomaly.rule_or_model, func.count(Anomaly.id)).group_by(
@@ -109,6 +126,28 @@ def collect(database_url: str) -> dict[str, Any]:
                 )
             ).all()
         )
+        classification_methods = dict(
+            session.execute(
+                select(Operation.classification_method, func.count(Operation.id)).group_by(
+                    Operation.classification_method
+                )
+            ).all()
+        )
+        canonical_main_activities = dict(
+            session.execute(
+                select(Operation.main_activity_normalized, func.count(Operation.id)).group_by(
+                    Operation.main_activity_normalized
+                )
+            ).all()
+        )
+        stored_asset_statuses = dict(
+            session.execute(
+                select(StoredAsset.storage_status, func.count(StoredAsset.id)).group_by(
+                    StoredAsset.storage_status
+                )
+            ).all()
+        )
+        revision = str(session.execute(text("SELECT version_num FROM alembic_version")).scalar())
         job_duration = session.scalar(select(func.sum(ProcessingJob.duration_seconds))) or 0.0
         failures = session.scalars(
             select(SourceDocument.file_name, SourceDocument.error_message).where(
@@ -190,6 +229,8 @@ def collect(database_url: str) -> dict[str, Any]:
             + header_sentinels
             + operation_sentinels,
             "normalized_optional_section_sentinel_cells": section_sentinel_cells,
+            "classification_methods": dict(sorted(classification_methods.items())),
+            "canonical_main_activities": dict(sorted(canonical_main_activities.items())),
         },
         "pressure_profiles": {
             "plots": len(profile_plots),
@@ -210,6 +251,11 @@ def collect(database_url: str) -> dict[str, Any]:
         },
         "anomaly_candidates": anomalies,
         "anomaly_candidates_by_rule": dict(sorted(anomaly_rules.items())),
+        "anomaly_candidates_by_detector": dict(sorted(anomaly_detectors.items())),
+        "anomaly_validation_statuses": dict(sorted(anomaly_validation.items())),
+        "anomaly_reviews": anomaly_reviews,
+        "stored_asset_statuses": dict(sorted(stored_asset_statuses.items())),
+        "database_revision": revision,
         "interpretation": {
             "status": "candidate_level",
             "domain_validated": False,
@@ -240,6 +286,8 @@ Generated: {result["generated_at"]}
 
 - Reports stored: {ddr["reports"]}
 - Operation rows stored: {ddr["operations"]}
+- Classification methods: {ddr["classification_methods"]}
+- Canonical main activities: {ddr["canonical_main_activities"]}
 - Operation rows marked fail: {ddr["fail_operation_rows"]} across {ddr["pdfs_with_fail_rows"]} PDFs
 - Reports with Equipment Failure Information: {ddr["equipment_failure_reports"]}
 - Reports with populated equipment failures: {ddr["populated_failure_reports"]}
@@ -268,6 +316,14 @@ Generated: {result["generated_at"]}
 - Per-image axes calibrated: {times["calibrated_images"]}/{times["plots"]}
 - Legend markers excluded: {times["legend_markers_excluded"]}
 - Images with explicitly unknown pressure unit: {times["unknown_unit_images"]}
+
+## ML candidates, reviews, and persistence
+
+- Database revision: {result["database_revision"]}
+- Candidates by detector: {result["anomaly_candidates_by_detector"]}
+- Candidate validation statuses: {result["anomaly_validation_statuses"]}
+- Append-only anomaly reviews: {result["anomaly_reviews"]}
+- Stored asset statuses in the committed demo snapshot: {result["stored_asset_statuses"]}
 
 ## Interpretation boundary
 

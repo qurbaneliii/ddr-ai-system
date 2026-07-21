@@ -5,12 +5,17 @@ import time
 
 from sqlalchemy.orm import Session
 
-from ddr_ai.chat.contracts import ChatAnswer
-from ddr_ai.chat.grounding import grounded_verbalize, localize_deterministic_answer
+from ddr_ai.chat.contracts import ChatAnswer, PlotImageContext
+from ddr_ai.chat.grounding import (
+    grounded_verbalize,
+    localize_deterministic_answer,
+    unsupported_claim_reason,
+)
 from ddr_ai.chat.handlers import HANDLER_REGISTRY
+from ddr_ai.chat.multimodal import deterministic_plot_description, vlm_prompt
 from ddr_ai.chat.query import QueryAnalyzer, QueryPlan
 from ddr_ai.db.models import QueryAudit
-from ddr_ai.nlp.providers import BaseLLMProvider, LexicalFallbackProvider
+from ddr_ai.nlp.providers import BaseLLMProvider, LexicalFallbackProvider, LLMProviderError
 from ddr_ai.retrieval.corpus import (
     CorpusRetriever,
     EvidencePack,
@@ -137,6 +142,74 @@ def _apply_diagnostics(answer: ChatAnswer, plan: QueryPlan) -> None:
         )
 
 
+def _apply_plot_context(
+    answer: ChatAnswer,
+    provider: BaseLLMProvider,
+    context: PlotImageContext,
+    *,
+    question: str,
+    language: str,
+) -> None:
+    facts = context.deterministic_facts()
+    deterministic = deterministic_plot_description(context, language=language)
+    citation = context.allowed_citation
+    limitations = [
+        "Visual description is limited to the explicitly selected stored plot image.",
+        "Deterministic CV/SQL facts remain authoritative over qualitative visual wording.",
+    ]
+    if context.unit_status == "unknown" or not context.y_unit:
+        limitations.append("Pressure unit is unknown and must not be inferred from the image.")
+    answer.selected_plot_identifier = context.plot_identifier
+    answer.visual_validation_status = "deterministic_fallback"
+    answer.evidence.append(citation)
+    answer.rows.append({"selected_plot_facts": facts})
+    answer.evidence_hit_count = max(answer.evidence_hit_count, len(answer.evidence))
+    answer.limitations.extend(item for item in limitations if item not in answer.limitations)
+    if not provider.supports_images:
+        answer.answer = f"{answer.answer}\n\n{deterministic}"
+        answer.answer_type = "deterministic selected-plot facts"
+        reason = provider.health_check().reason or "The active provider does not support images."
+        answer.fallback_reason = answer.fallback_reason or reason
+        return
+    try:
+        result = provider.describe_image(
+            context.image_bytes,
+            mime_type=context.mime_type,
+            prompt=vlm_prompt(context, question=question),
+        )
+    except LLMProviderError as exc:
+        answer.answer = f"{answer.answer}\n\n{deterministic}"
+        answer.answer_type = "deterministic selected-plot facts"
+        answer.visual_provider = provider.mode_label
+        answer.visual_model = provider.model
+        answer.visual_validation_status = "provider_error_fallback"
+        answer.fallback_reason = str(exc)
+        return
+    rejection = unsupported_claim_reason(
+        result.content,
+        "plot_visual",
+        [facts],
+        [citation],
+        limitations,
+        deterministic_answer=deterministic,
+    )
+    answer.visual_provider = provider.mode_label
+    answer.visual_model = result.model
+    if rejection:
+        answer.answer = f"{answer.answer}\n\n{deterministic}"
+        answer.answer_type = "deterministic selected-plot facts"
+        answer.visual_validation_status = "rejected"
+        answer.fallback_reason = rejection
+        return
+    label = "Visual description" if language != "az" else "Vizual təsvir"
+    answer.answer = f"{answer.answer}\n\n{label}: {result.content}\n\n{deterministic}"
+    answer.answer_type = "deterministic facts + grounded VLM"
+    answer.visual_analysis_used = True
+    answer.visual_validation_status = "accepted"
+    answer.provider = provider.mode_label
+    answer.model = result.model
+
+
 def answer_question(
     session: Session,
     question: str,
@@ -144,15 +217,21 @@ def answer_question(
     provider: BaseLLMProvider | None = None,
     language: str = "Auto",
     history: list[dict[str, str]] | None = None,
+    plot_context: PlotImageContext | None = None,
 ) -> ChatAnswer:
     """Plan safely, run a trusted handler or bounded corpus search, then verbalize facts."""
 
     started = time.perf_counter()
     active_provider = provider or LexicalFallbackProvider("No reachable LLM provider was supplied.")
+    planning_provider = (
+        LexicalFallbackProvider("Selected plots use deterministic query planning.")
+        if plot_context is not None
+        else active_provider
+    )
     plan = QueryAnalyzer().analyze(
         question,
         language,
-        active_provider,
+        planning_provider,
         history=(history or [])[-4:],
     )
     answer = _deterministic_answer(session, plan)
@@ -164,7 +243,7 @@ def answer_question(
         rows=answer.rows,
     )
 
-    if answer.route == "not_found_corpus":
+    if plot_context is not None or answer.route == "not_found_corpus":
         generated_text, result, fallback_reason = deterministic_text, None, None
     else:
         generated_text, result, fallback_reason = grounded_verbalize(
@@ -203,6 +282,14 @@ def answer_question(
             limitation = "This answer is deterministic/lexical and was not LLM-generated."
             if limitation not in answer.limitations:
                 answer.limitations.append(limitation)
+    if plot_context is not None:
+        _apply_plot_context(
+            answer,
+            active_provider,
+            plot_context,
+            question=plan.standalone_question,
+            language=plan.target_language,
+        )
     _audit(session, question, answer, started)
     return answer
 

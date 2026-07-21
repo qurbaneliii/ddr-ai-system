@@ -32,12 +32,30 @@ def test_alembic_upgrade_creates_failure_correlation_schema(tmp_path: Path) -> N
         operation_columns = {
             row[1] for row in connection.execute("PRAGMA table_info(operations)")
         }
-    assert version == "0005"
+        anomaly_columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(anomalies)")
+        }
+        anomaly_indexes = {
+            row[1] for row in connection.execute("PRAGMA index_list(anomalies)")
+        }
+    assert version == "0006"
     assert {
+        "anomaly_reviews",
         "equipment_failures",
         "failure_operation_matches",
+        "model_runs",
         "retrieval_chunks",
         "seed_versions",
         "stored_assets",
     } <= tables
-    assert {"start_datetime", "end_datetime", "temporal_status"} <= operation_columns
+    assert {
+        "start_datetime",
+        "end_datetime",
+        "temporal_status",
+        "classification_method",
+        "classification_confidence",
+        "classification_model_version",
+        "classification_evidence_json",
+    } <= operation_columns
+    assert {"detector_type", "model_version", "candidate_key"} <= anomaly_columns
+    assert {"ix_anomalies_detector_model", "uq_anomalies_candidate_key"} <= anomaly_indexes

@@ -29,6 +29,7 @@ def _settings(**values: object) -> Settings:
         openai_api_key="test-secret-that-must-not-leak",
         openai_model="gpt-test",
         openai_vlm_enabled=True,
+        openai_vlm_model="gpt-vlm-test",
         _env_file=None,
         **values,
     )
@@ -63,9 +64,11 @@ def test_openai_responses_request_and_optional_image(monkeypatch: pytest.MonkeyP
     assert chat.content == image.content == "Grounded answer"
     assert responses.requests[0]["instructions"] == "Use supplied facts."
     image_content = responses.requests[1]["input"][0]["content"]
+    assert responses.requests[1]["model"] == "gpt-vlm-test"
     assert image_content[1]["type"] == "input_image"
     assert image_content[1]["image_url"].startswith("data:image/png;base64,")
     assert provider.health_check().last_request_success is True
+    assert provider.supports_images is True
 
 
 def test_openai_structured_output_uses_strict_schema_and_bounded_tokens(

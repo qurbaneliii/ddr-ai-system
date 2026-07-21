@@ -61,6 +61,20 @@ def render_chat_message(message: dict[str, Any], index: int) -> None:
             )
         if message.get("fallback_reason"):
             st.info(f"Fallback: {message['fallback_reason']}")
+        if message.get("selected_plot_identifier"):
+            st.caption(
+                f"Selected plot: {message['selected_plot_identifier']} · "
+                f"Visual validation: {message.get('visual_validation_status', 'not_requested')}"
+            )
+            if message.get("visual_provider"):
+                st.caption(
+                    f"Visual provider: {message['visual_provider']}"
+                    + (
+                        f" · model {message['visual_model']}"
+                        if message.get("visual_model")
+                        else ""
+                    )
+                )
         if message.get("limitations"):
             with st.expander("Limitations"):
                 for limitation in message["limitations"]:
