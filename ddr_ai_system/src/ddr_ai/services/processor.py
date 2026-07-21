@@ -343,6 +343,17 @@ def process_file(
     if not source_path.is_absolute():
         source_path = PROJECT_ROOT / source_path
     source_path = source_path.resolve()
+    if (
+        settings.asset_storage_backend.casefold().strip() == "database"
+        and source_path.stat().st_size > settings.asset_database_max_mb * 1024 * 1024
+    ):
+        return {
+            "path": str(source_path),
+            "status": "rejected_persistence_size_limit",
+            "sha256": sha256_file(source_path),
+            "duration_seconds": 0.0,
+            "error": None,
+        }
     decision = route_asset(source_path)
     digest = sha256_file(source_path)
     started = time.perf_counter()
@@ -351,6 +362,7 @@ def process_file(
             session, source_path, digest, decision.kind.value, settings
         )
         if unchanged:
+            persist_asset_record(session, source, source_path, settings)
             return {"path": str(source_path), "status": "skipped_unchanged", "sha256": digest}
         job = ProcessingJob(
             source_document_id=source.id,

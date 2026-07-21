@@ -8,11 +8,12 @@ from PIL import Image
 from sqlalchemy import select
 
 from ddr_ai.config import Settings
-from ddr_ai.db.models import Page, SourceDocument
-from ddr_ai.db.session import session_scope, upgrade_schema
+from ddr_ai.db.models import Page, SourceDocument, StoredAsset
+from ddr_ai.db.session import dispose_engine, session_scope, upgrade_schema
 from ddr_ai.ingestion.router import AssetKind, classify_pdf
 from ddr_ai.pdf.document import parse_document_pdf
 from ddr_ai.pdf.ocr import BaseOCRBackend, OCRResult
+from ddr_ai.services.asset_storage import load_persisted_asset
 from ddr_ai.services.processor import process_file
 
 
@@ -81,10 +82,24 @@ def test_hybrid_process_file_persists_page_methods(tmp_path: Path) -> None:
         settings=settings,
         ocr_backend=HybridOCRBackend(),
     )
+    repeated = process_file(
+        path,
+        database_url=database_url,
+        settings=settings,
+        ocr_backend=HybridOCRBackend(),
+    )
 
     assert result["status"] == "complete"
+    assert repeated["status"] == "skipped_unchanged"
     with session_scope(database_url) as session:
         source = session.scalar(select(SourceDocument))
         pages = list(session.scalars(select(Page).order_by(Page.page_number)))
         assert source is not None and source.asset_kind == "hybrid_pdf"
         assert [item.extraction_method for item in pages] == ["native_pdf", "ocr"]
+        asset = session.scalar(select(StoredAsset))
+        assert asset is not None and asset.storage_status == "stored"
+        source_id = source.id
+
+    dispose_engine(database_url)
+    with session_scope(database_url) as session:
+        assert load_persisted_asset(session, source_id) == path.read_bytes()

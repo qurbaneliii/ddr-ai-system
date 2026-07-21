@@ -24,6 +24,7 @@ STREAMLIT_SECRET_KEYS = {
     "OPENAI_VLM_MAX_PIXELS",
     "DDR_ASSET_STORAGE_BACKEND",
     "DDR_ASSET_DATABASE_MAX_MB",
+    "DDR_BUILD_SHA",
 }
 
 
@@ -61,8 +62,12 @@ class Settings(BaseSettings):
     query_timeout_seconds: int = Field(default=10, ge=1, le=120)
     default_query_limit: int = Field(default=200, ge=1, le=1000)
     max_query_limit: int = Field(default=1000, ge=1, le=10000)
-    asset_storage_backend: str = Field(default="metadata_only")
+    asset_storage_backend: str = Field(default="database")
     asset_database_max_mb: int = Field(default=2, ge=1, le=5)
+    build_sha: str = Field(
+        default="",
+        validation_alias=AliasChoices("DDR_BUILD_SHA"),
+    )
 
     llm_provider: str = Field(
         default="openai",
@@ -128,6 +133,12 @@ class Settings(BaseSettings):
     @property
     def persistence_mode(self) -> str:
         return "persistent PostgreSQL" if self.is_postgres else "temporary SQLite demo"
+
+    @property
+    def persistent_upload_limit_mb(self) -> int:
+        if self.asset_storage_backend.casefold().strip() == "database":
+            return min(self.max_upload_mb, self.asset_database_max_mb)
+        return self.max_upload_mb
 
 
 def streamlit_secret_overrides(secrets: Mapping[str, Any]) -> dict[str, Any]:

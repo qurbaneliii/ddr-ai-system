@@ -493,7 +493,7 @@ def uploads(database_url: str, settings: Settings) -> None:
     else:
         st.info(
             f"PostgreSQL preserves extracted records; raw files up to {settings.asset_database_max_mb} MB "
-            "use the explicitly enabled bounded database asset store. Larger files remain metadata-only."
+            "use the bounded database asset store. Larger files are rejected before processing."
         )
     with st.form("upload-and-process", clear_on_submit=True):
         uploaded = st.file_uploader(
@@ -513,7 +513,12 @@ def uploads(database_url: str, settings: Settings) -> None:
                 candidates: list[Path] = []
                 for item in uploaded:
                     content = item.getvalue()
-                    if len(content) > settings.max_upload_mb * 1024 * 1024:
+                    upload_limit_mb = (
+                        settings.max_upload_mb
+                        if Path(item.name).suffix.casefold() == ".zip"
+                        else settings.persistent_upload_limit_mb
+                    )
+                    if len(content) > upload_limit_mb * 1024 * 1024:
                         results.append({"file": item.name, "status": "rejected_size_limit"})
                         continue
                     digest = hashlib.sha256(content).hexdigest()
