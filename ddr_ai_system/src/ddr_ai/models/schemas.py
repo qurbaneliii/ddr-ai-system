@@ -61,6 +61,10 @@ class OperationExtraction(BaseModel):
     normalized_values: dict[str, Any] = Field(default_factory=dict)
     bbox: tuple[float, float, float, float] | None = None
     confidence: float = 1.0
+    classification_method: str = "unknown"
+    classification_confidence: float | None = None
+    classification_model_version: str | None = None
+    classification_evidence: dict[str, Any] = Field(default_factory=dict)
 
 
 class EquipmentFailureExtraction(BaseModel):

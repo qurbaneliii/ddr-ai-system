@@ -28,7 +28,7 @@ def _postgres_url() -> str:
 def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence() -> None:
     target_url = _postgres_url()
     source_url = f"sqlite:///{COMMITTED_DATABASE.as_posix()}"
-    version = "committed-ddr-v0005"
+    version = "committed-ddr-v0006"
 
     first = seed_database(source_url, target_url, seed_version=version)
     second = seed_database(source_url, target_url, seed_version=version)

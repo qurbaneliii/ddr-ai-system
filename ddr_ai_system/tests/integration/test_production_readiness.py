@@ -19,7 +19,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         assert connection.execute("PRAGMA quick_check").fetchone() == ("ok",)
         assert connection.execute("PRAGMA foreign_key_check").fetchall() == []
         assert connection.execute("PRAGMA journal_mode").fetchone()[0] == "delete"
-        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0005",)
+        assert connection.execute("SELECT version_num FROM alembic_version").fetchone() == ("0006",)
         counts = {
             table: connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
             for table in (
@@ -37,6 +37,9 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         matched = connection.execute(
             "SELECT COUNT(*) FROM failure_operation_matches WHERE match_status = 'exact'"
         ).fetchone()[0]
+        classified = connection.execute(
+            "SELECT COUNT(*) FROM operations WHERE classification_method = 'source_rule'"
+        ).fetchone()[0]
 
     assert counts == {
         "source_documents": 1060,
@@ -50,6 +53,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         "retrieval_chunks": 18895,
     }
     assert matched == 242
+    assert classified == 10983
 
 
 def test_seed_database_is_explicit_and_idempotent(tmp_path: Path) -> None:

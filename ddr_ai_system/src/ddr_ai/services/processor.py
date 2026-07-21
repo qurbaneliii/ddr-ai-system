@@ -28,6 +28,7 @@ from ddr_ai.db.models import (
 )
 from ddr_ai.db.session import session_scope
 from ddr_ai.ingestion.router import AssetKind, route_asset
+from ddr_ai.nlp.activity_classifier import enrich_operation_classifications
 from ddr_ai.pdf.document import parse_document_pdf
 from ddr_ai.pdf.ocr import BaseOCRBackend
 from ddr_ai.plots import digitize_pressure_profile, digitize_pressure_time
@@ -161,6 +162,10 @@ def _persist_report(session: Session, source: SourceDocument, parsed: Any) -> No
                 if item.bbox is None
                 else dict(zip(("x0", "top", "x1", "bottom"), item.bbox, strict=True)),
                 confidence=item.confidence,
+                classification_method=item.classification_method,
+                classification_confidence=item.classification_confidence,
+                classification_model_version=item.classification_model_version,
+                classification_evidence_json=item.classification_evidence,
             )
         )
     session.flush()
@@ -362,14 +367,17 @@ def process_file(
                     AssetKind.SCANNED_PDF,
                     AssetKind.HYBRID_PDF,
                 }:
-                    _persist_report(
-                        session,
-                        source,
+                    parsed_report = enrich_operation_classifications(
                         parse_document_pdf(
                             source_path,
                             decision=decision,
                             ocr_backend=ocr_backend,
-                        ),
+                        )
+                    )
+                    _persist_report(
+                        session,
+                        source,
+                        parsed_report,
                     )
                 elif decision.kind == AssetKind.PRESSURE_PROFILE:
                     overlay = (

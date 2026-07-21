@@ -187,6 +187,14 @@ class Operation(Base):
     bbox_json: Mapped[dict[str, float] | None] = mapped_column(JSON)
     confidence: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
+    classification_method: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="unknown", index=True
+    )
+    classification_confidence: Mapped[float | None] = mapped_column(Float)
+    classification_model_version: Mapped[str | None] = mapped_column(String(128))
+    classification_evidence_json: Mapped[dict[str, Any]] = mapped_column(
+        JSON, nullable=False, default=dict
+    )
 
     report: Mapped[Report] = relationship(back_populates="operations")
 
@@ -405,7 +413,11 @@ class IdentityMapping(Base):
 
 class Anomaly(Base):
     __tablename__ = "anomalies"
-    __table_args__ = (Index("ix_anomalies_category_validation", "category", "validation_status"),)
+    __table_args__ = (
+        UniqueConstraint("candidate_key", name="uq_anomalies_candidate_key"),
+        Index("ix_anomalies_category_validation", "category", "validation_status"),
+        Index("ix_anomalies_detector_model", "detector_type", "model_version"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     source_document_id: Mapped[int | None] = mapped_column(ForeignKey("source_documents.id"))
@@ -421,6 +433,51 @@ class Anomaly(Base):
     validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="unreviewed")
     domain_validated: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    detector_type: Mapped[str] = mapped_column(String(32), nullable=False, default="rule")
+    model_version: Mapped[str | None] = mapped_column(String(128))
+    candidate_key: Mapped[str | None] = mapped_column(String(64))
+
+    reviews: Mapped[list[AnomalyReview]] = relationship(
+        back_populates="anomaly", cascade="all, delete-orphan"
+    )
+
+
+class AnomalyReview(Base):
+    __tablename__ = "anomaly_reviews"
+    __table_args__ = (Index("ix_anomaly_reviews_anomaly_created", "anomaly_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    anomaly_id: Mapped[int] = mapped_column(
+        ForeignKey("anomalies.id", ondelete="CASCADE"), nullable=False
+    )
+    decision: Mapped[str] = mapped_column(String(32), nullable=False)
+    reviewer: Mapped[str] = mapped_column(String(256), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False
+    )
+
+    anomaly: Mapped[Anomaly] = relationship(back_populates="reviews")
+
+
+class ModelRun(Base):
+    __tablename__ = "model_runs"
+    __table_args__ = (
+        UniqueConstraint("model_type", "model_version", name="uq_model_runs_type_version"),
+        Index("ix_model_runs_active", "model_type", "is_active"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    model_version: Mapped[str] = mapped_column(String(128), nullable=False)
+    artifact_sha256: Mapped[str | None] = mapped_column(String(64))
+    training_data_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    parameters_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metrics_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(UTC).replace(tzinfo=None), nullable=False
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class QueryAudit(Base):
