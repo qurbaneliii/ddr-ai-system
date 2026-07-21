@@ -29,6 +29,7 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
                 "plots",
                 "plot_points",
                 "anomalies",
+                "anomaly_reviews",
                 "equipment_failures",
                 "failure_operation_matches",
                 "retrieval_chunks",
@@ -47,13 +48,21 @@ def test_committed_database_is_integral_current_and_source_backed() -> None:
         "operations": 10983,
         "plots": 60,
         "plot_points": 1009,
-        "anomalies": 1291,
+        "anomalies": 1482,
+        "anomaly_reviews": 0,
         "equipment_failures": 244,
         "failure_operation_matches": 244,
         "retrieval_chunks": 18895,
     }
     assert matched == 242
     assert classified == 10983
+    with sqlite3.connect(COMMITTED_DATABASE) as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM anomalies WHERE detector_type = 'ml'"
+        ).fetchone() == (191,)
+        assert connection.execute(
+            "SELECT COUNT(*) FROM anomalies WHERE detector_type != 'ml'"
+        ).fetchone() == (1291,)
 
 
 def test_seed_database_is_explicit_and_idempotent(tmp_path: Path) -> None:

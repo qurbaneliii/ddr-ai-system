@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from ddr_ai.chat.query import QueryPlan
 from ddr_ai.db.models import (
+    Anomaly,
     EquipmentFailure,
     ExtractedValue,
     Operation,
@@ -339,6 +340,42 @@ def _document_chunks(session: Session, document: SourceDocument) -> list[Retriev
                         "depth", failure_item.depth_mmd, failure_item.depth_mtvd,
                     ),
                     metadata={"table_index": failure_item.table_index, "row_index": failure_item.row_index},
+                )
+            )
+        validated_anomalies = list(
+            session.scalars(
+                select(Anomaly)
+                .where(
+                    Anomaly.source_document_id == document.id,
+                    Anomaly.domain_validated.is_(True),
+                    Anomaly.validation_status == "confirmed",
+                )
+                .order_by(Anomaly.id)
+            )
+        )
+        for anomaly in validated_anomalies:
+            chunks.append(
+                _chunk(
+                    key=f"validated_anomaly:{anomaly.id}",
+                    source_type="validated_anomaly",
+                    source_record_id=anomaly.id,
+                    document=document,
+                    report=report,
+                    page_number=None,
+                    section_type=anomaly.category,
+                    text=_text(
+                        "human-confirmed anomaly",
+                        anomaly.category,
+                        anomaly.explanation,
+                        anomaly.evidence_json,
+                        "detector",
+                        anomaly.detector_type,
+                    ),
+                    metadata={
+                        "detector_type": anomaly.detector_type,
+                        "model_version": anomaly.model_version,
+                        "validation_status": anomaly.validation_status,
+                    },
                 )
             )
     plot = session.scalar(select(Plot).where(Plot.source_document_id == document.id))

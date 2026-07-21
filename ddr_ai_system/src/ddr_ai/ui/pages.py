@@ -12,7 +12,7 @@ from typing import Any
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
 
 from ddr_ai.chat.service import answer_question
 from ddr_ai.config import Settings
@@ -32,6 +32,7 @@ from ddr_ai.db.models import (
 from ddr_ai.db.session import session_scope
 from ddr_ai.ingestion.safe_zip import UnsafeArchiveError, inspect_zip, safe_extract_zip
 from ddr_ai.nlp.providers import ProviderSelection, provider_status
+from ddr_ai.services.anomaly_reviews import add_anomaly_review, review_history
 from ddr_ai.services.processor import process_file
 from ddr_ai.ui.components import header, render_chat_message, render_plot_images, safe_metric
 
@@ -211,27 +212,127 @@ def trends(database_url: str) -> None:
     with session_scope(database_url) as session:
         rows = session.execute(
             select(
-                Anomaly.category,
-                Anomaly.rule_or_model,
-                Anomaly.severity_heuristic,
-                Anomaly.confidence,
-                Anomaly.domain_validated,
-                Anomaly.explanation,
-            ).limit(5000)
+                Anomaly,
+                SourceDocument.file_name,
+                Report.wellbore,
+                Report.period_end,
+                Operation.main_activity_normalized,
+            )
+            .outerjoin(SourceDocument, SourceDocument.id == Anomaly.source_document_id)
+            .outerjoin(
+                Operation,
+                and_(
+                    Anomaly.source_record_type == "operation",
+                    Operation.id == Anomaly.source_record_id,
+                ),
+            )
+            .outerjoin(Report, Report.id == Operation.report_id)
+            .order_by(Anomaly.id.desc())
+            .limit(5000)
         ).all()
     frame = pd.DataFrame(
-        rows,
-        columns=["category", "rule", "severity", "confidence", "domain_validated", "explanation"],
+        [
+            {
+                "id": anomaly.id,
+                "wellbore": wellbore,
+                "date": period_end,
+                "activity": activity,
+                "category": anomaly.category,
+                "detector_type": anomaly.detector_type,
+                "rule_or_model": anomaly.rule_or_model,
+                "model_version": anomaly.model_version,
+                "score": anomaly.score,
+                "severity": anomaly.severity_heuristic,
+                "confidence": anomaly.confidence,
+                "validation_status": anomaly.validation_status,
+                "domain_validated": anomaly.domain_validated,
+                "source_record": f"{anomaly.source_record_type}:{anomaly.source_record_id}",
+                "source_file": file_name,
+                "explanation": anomaly.explanation,
+                "evidence": anomaly.evidence_json,
+            }
+            for anomaly, file_name, wellbore, period_end, activity in rows
+        ]
     )
     if frame.empty:
         st.info("No anomaly candidates are available.")
         return
     st.warning("Automated anomalies are candidates, not confirmed incidents.")
+    filter_columns = st.columns(4)
+    filtered = frame
+    for column, field, label in (
+        (filter_columns[0], "detector_type", "Detector"),
+        (filter_columns[1], "severity", "Severity"),
+        (filter_columns[2], "validation_status", "Review status"),
+        (filter_columns[3], "category", "Category"),
+    ):
+        values = ["all", *sorted(str(item) for item in frame[field].dropna().unique())]
+        selected = column.selectbox(label, values, key=f"anomaly-filter-{field}")
+        if selected != "all":
+            filtered = filtered[filtered[field].astype(str) == selected]
+    detail_columns = st.columns(2)
+    well_values = ["all", *sorted(str(item) for item in frame["wellbore"].dropna().unique())]
+    activity_values = ["all", *sorted(str(item) for item in frame["activity"].dropna().unique())]
+    selected_well = detail_columns[0].selectbox("Wellbore", well_values, key="anomaly-well")
+    selected_activity = detail_columns[1].selectbox(
+        "Activity", activity_values, key="anomaly-activity"
+    )
+    if selected_well != "all":
+        filtered = filtered[filtered["wellbore"].astype(str) == selected_well]
+    if selected_activity != "all":
+        filtered = filtered[filtered["activity"].astype(str) == selected_activity]
     chart = frame.groupby(["category", "severity"]).size().reset_index(name="count")
     st.plotly_chart(
         px.bar(chart, x="category", y="count", color="severity"), use_container_width=True
     )
-    st.dataframe(frame, hide_index=True, use_container_width=True, height=520)
+    st.dataframe(filtered, hide_index=True, use_container_width=True, height=520)
+    if filtered.empty:
+        return
+    selected_id = st.selectbox(
+        "Candidate to review",
+        [int(value) for value in filtered["id"].tolist()],
+        format_func=lambda value: f"#{value} · {frame.loc[frame['id'] == value, 'category'].iloc[0]}",
+    )
+    with st.expander("Record a domain review", expanded=False):
+        with st.form("anomaly-review-form", clear_on_submit=True):
+            decision = st.selectbox(
+                "Decision", ["confirmed", "rejected", "needs_more_evidence"]
+            )
+            reviewer = st.text_input("Reviewer")
+            note = st.text_area("Note (optional)")
+            submitted = st.form_submit_button("Save review", type="primary")
+        if submitted:
+            try:
+                with session_scope(database_url) as session:
+                    add_anomaly_review(
+                        session,
+                        selected_id,
+                        decision=decision,
+                        reviewer=reviewer,
+                        note=note,
+                    )
+                st.success("Append-only anomaly review saved.")
+                st.rerun()
+            except (ValueError, LookupError) as exc:
+                st.error(str(exc))
+        with session_scope(database_url) as session:
+            history = review_history(session, selected_id)
+        if history:
+            st.dataframe(
+                pd.DataFrame(
+                    [
+                        {
+                            "decision": item.decision,
+                            "reviewer": item.reviewer,
+                            "note": item.note,
+                            "created_at": item.created_at,
+                        }
+                        for item in history
+                    ]
+                ),
+                hide_index=True,
+                use_container_width=True,
+            )
 
 
 def plots(database_url: str) -> None:

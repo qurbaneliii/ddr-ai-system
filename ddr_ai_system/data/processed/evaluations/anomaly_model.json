@@ -1,0 +1,47 @@
+{
+  "evaluation_name": "operation_duration_isolation_forest_candidates",
+  "timestamp": "2026-07-21T02:46:55.638741+00:00",
+  "git_sha": "d8b7be3",
+  "parser_version": "0.3.0",
+  "model_version": "isolation-forest-duration-v1",
+  "data_fingerprint": "37ffa9b1a6507c7f1932f680cbee5a4238bdb006762a2e3238ad8c373761beee",
+  "sample_count": 10916,
+  "parameters": {
+    "model_version": "isolation-forest-duration-v1",
+    "minimum_group_size": 30,
+    "contamination": 0.02,
+    "robust_z_threshold": 3.5,
+    "random_state": 42
+  },
+  "actual_metrics": {
+    "eligible_operations": 10916,
+    "excluded_small_groups": {
+      "completion/*": 22,
+      "plug_abandon/*": 17,
+      "workover/*": 28
+    },
+    "candidate_count": 191,
+    "candidate_rate": 0.01749725174056431,
+    "persisted_candidate_count": 191,
+    "overlap_with_rule_candidates": 17,
+    "score_distribution": {
+      "min": -0.33926529867778754,
+      "median": -0.21593016117413905,
+      "max": 0.22614812010413599
+    },
+    "candidates_by_activity": {
+      "completion": 13,
+      "drilling": 81,
+      "formation_evaluation": 14,
+      "interruption": 36,
+      "moving": 3,
+      "plug_abandon": 30,
+      "workover": 14
+    }
+  },
+  "limitations": [
+    "Unsupervised candidates have no precision/recall claim without reviewer labels.",
+    "Duration is compared only inside supported canonical activity groups.",
+    "Candidates are not confirmed incidents or engineering recommendations."
+  ]
+}

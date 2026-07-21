@@ -8,11 +8,19 @@ import pytest
 from sqlalchemy import func, select
 
 from ddr_ai.chat.query import QueryAnalyzer
-from ddr_ai.db.models import Report, ReportSection, RetrievalChunk, SourceDocument
+from ddr_ai.db.models import (
+    Anomaly,
+    AnomalyReview,
+    Report,
+    ReportSection,
+    RetrievalChunk,
+    SourceDocument,
+)
 from ddr_ai.db.seeding import seed_database
 from ddr_ai.db.session import dispose_engine, session_scope
 from ddr_ai.nlp.providers import LexicalFallbackProvider
 from ddr_ai.retrieval.corpus import CorpusRetriever, replace_document_chunks
+from ddr_ai.services.anomaly_reviews import add_anomaly_review
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 COMMITTED_DATABASE = PROJECT_ROOT / "data" / "processed" / "ddr_ai.db"
@@ -79,6 +87,18 @@ def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence() -> N
         inserted_chunks = replace_document_chunks(session, document.id)
         inserted_document_id = document.id
         assert inserted_chunks >= 2
+        candidate = session.scalar(
+            select(Anomaly).where(Anomaly.detector_type == "ml").order_by(Anomaly.id)
+        )
+        assert candidate is not None
+        review = add_anomaly_review(
+            session,
+            candidate.id,
+            decision="needs_more_evidence",
+            reviewer="postgres-integration-reviewer",
+            note="Reconnect persistence proof.",
+        )
+        inserted_review_id = review.id
 
     dispose_engine(target_url)
 
@@ -86,6 +106,9 @@ def test_full_seed_idempotency_refusal_sequence_and_reconnect_persistence() -> N
         persisted = session.get(SourceDocument, inserted_document_id)
         assert persisted is not None
         assert persisted.file_name == "restart-persistence-fixture.pdf"
+        persisted_review = session.get(AnomalyReview, inserted_review_id)
+        assert persisted_review is not None
+        assert persisted_review.reviewer == "postgres-integration-reviewer"
         assert session.scalar(select(func.count(RetrievalChunk.id))) == original_chunks + inserted_chunks
         plan = QueryAnalyzer().analyze(
             "Which report contains ddrpersistmarker?",
