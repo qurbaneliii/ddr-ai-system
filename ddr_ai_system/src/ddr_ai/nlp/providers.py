@@ -105,12 +105,14 @@ class OpenAIProvider(BaseLLMProvider):
     name: str = "openai"
     mode_label: str = "OpenAI-verbalized"
     model: str = field(init=False)
+    supports_images: bool = field(init=False)
     _client: OpenAI = field(init=False, repr=False)
     _last_request_success: bool | None = field(default=None, init=False, repr=False)
     _last_reason: str | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         self.model = self.settings.openai_model.strip()
+        self.supports_images = self.settings.openai_vlm_enabled
         key = self.settings.openai_api_key.get_secret_value().strip()
         if not key:
             raise OpenAIProviderError("OPENAI_API_KEY is not configured.")
@@ -235,11 +237,6 @@ class OpenAIProvider(BaseLLMProvider):
                 "max_output_tokens": min(self.settings.openai_max_output_tokens, 800),
             }
         )
-
-    @property
-    def supports_images(self) -> bool:
-        return self.settings.openai_vlm_enabled
-
 
 @dataclass(frozen=True, slots=True)
 class ProviderSelection:

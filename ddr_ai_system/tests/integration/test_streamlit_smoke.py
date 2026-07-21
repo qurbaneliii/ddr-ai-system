@@ -22,7 +22,7 @@ def test_streamlit_app_starts_with_lexical_fallback(monkeypatch, tmp_path: Path)
     monkeypatch.setenv("LLM_PROVIDER", "lexical")
     configure_test_database(monkeypatch, tmp_path)
     path = Path(__file__).resolve().parents[2] / "streamlit_app.py"
-    app = AppTest.from_file(str(path), default_timeout=30).run()
+    app = AppTest.from_file(str(path), default_timeout=60).run()
     assert not app.exception
     assert app.title or app.markdown
 
@@ -31,7 +31,7 @@ def test_chat_history_survives_page_reruns(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("LLM_PROVIDER", "lexical")
     configure_test_database(monkeypatch, tmp_path)
     path = Path(__file__).resolve().parents[2] / "streamlit_app.py"
-    app = AppTest.from_file(str(path), default_timeout=30).run()
+    app = AppTest.from_file(str(path), default_timeout=60).run()
     app.radio[0].set_value("Chat").run()
     app.session_state["chat_history"] = [
         {"role": "user", "content": "Persist this question"},

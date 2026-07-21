@@ -220,6 +220,7 @@ def test_follow_up_is_rewritten_but_history_is_not_evidence() -> None:
     "question",
     [
         "What is the current oil price?",
+        "What is the current market price of oil?",
         "Summarize completed activities for 99/99-Z-99.",
         "What happened on 2099-01-01?",
     ],

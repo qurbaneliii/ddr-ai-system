@@ -107,7 +107,9 @@ def generate_duration_anomalies(
         if len(group_rows) < active.minimum_group_size:
             excluded_groups["/".join(group_key)] = len(group_rows)
             continue
-        durations = np.asarray([float(item.duration_hours) for item, _ in group_rows]).reshape(-1, 1)
+        durations = np.asarray(
+            [float(item.duration_hours or 0.0) for item, _ in group_rows]
+        ).reshape(-1, 1)
         median, mad, robust_z = _robust_values(durations[:, 0])
         model = IsolationForest(
             contamination=active.contamination,

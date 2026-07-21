@@ -1,6 +1,6 @@
 {
   "evaluation_name": "ddr_activity_classifier_grouped_holdout",
-  "timestamp": "2026-07-21T02:40:33.729039+00:00",
+  "timestamp": "2026-07-21T03:28:41.717979+00:00",
   "git_sha": "d5b7559",
   "parser_version": "0.3.0",
   "model_version": "activity-tfidf-logreg-v1",

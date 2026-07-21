@@ -21,6 +21,7 @@ INTENTS = {
     "drilling_fluid_lookup",
     "operational_problem_search",
     "date_depth_trend",
+    "anomaly_candidates",
     "plot_facts",
     "plot_trends",
     "identity_mapping",
@@ -214,13 +215,31 @@ def _synonyms(terms: list[str], question: str) -> list[str]:
 
 def _deterministic_intent(question: str, wellbore: str | None) -> tuple[str, float]:
     lower = _normalized(question)
-    if any(term in lower for term in ("current oil price", "oil price today", "bugünkü neft qiyməti", "xəbər")):
+    external_market_question = (
+        any(term in lower for term in ("current", "today", "bugünkü"))
+        and any(term in lower for term in ("oil", "neft"))
+        and any(term in lower for term in ("price", "qiyməti", "qiymət"))
+    )
+    if external_market_question or "xəbər" in lower:
         return "unsupported_out_of_corpus", 1.0
     if any(
         term in lower
         for term in ("mapping", "same well", "belong to the same", "related", "eyni quyu", "uyğunluq")
     ):
         return "identity_mapping", 0.98
+    if any(
+        term in lower
+        for term in (
+            "anomaly",
+            "anomalies",
+            "unusual duration",
+            "rule vs ml",
+            "rule and ml",
+            "validated candidate",
+            "confirmed candidate",
+        )
+    ):
+        return "anomaly_candidates", 0.98
     if "pressure" in lower or "təzyiq" in lower or "pressure_" in lower:
         return ("plot_trends", 0.95) if "trend" in lower else ("plot_facts", 0.9)
     if any(term in lower for term in ("daily summary", "latest report", "son ddr", "gündəlik", "xülasə")):

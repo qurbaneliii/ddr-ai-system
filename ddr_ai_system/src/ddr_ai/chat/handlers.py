@@ -11,6 +11,7 @@ from ddr_ai.analytics.trends import robust_sparse_trend
 from ddr_ai.chat.contracts import ChatAnswer
 from ddr_ai.chat.query import QueryPlan
 from ddr_ai.db.models import (
+    Anomaly,
     EquipmentFailure,
     FailureOperationMatch,
     IdentityMapping,
@@ -227,6 +228,62 @@ def _activity_aggregation(session: Session, plan: QueryPlan) -> ChatAnswer:
     )
 
 
+def _anomaly_candidates(session: Session, plan: QueryPlan) -> ChatAnswer:
+    lower = plan.standalone_question.casefold()
+    validated_only = any(term in lower for term in ("validated", "confirmed", "reviewed"))
+    statement = select(
+        Anomaly.detector_type,
+        Anomaly.category,
+        Anomaly.validation_status,
+        Anomaly.domain_validated,
+        func.count(Anomaly.id).label("candidate_count"),
+    )
+    if validated_only:
+        statement = statement.where(Anomaly.domain_validated.is_(True))
+    statement = statement.group_by(
+        Anomaly.detector_type,
+        Anomaly.category,
+        Anomaly.validation_status,
+        Anomaly.domain_validated,
+    ).order_by(Anomaly.detector_type, Anomaly.category, Anomaly.validation_status)
+    rows = [
+        {
+            "detector_type": detector,
+            "category": category,
+            "validation_status": status,
+            "domain_validated": validated,
+            "candidate_count": count,
+        }
+        for detector, category, status, validated, count in session.execute(statement)
+    ]
+    if validated_only and not rows:
+        return ChatAnswer(
+            "No human-confirmed anomaly is stored. Automated rule and ML records remain candidates until domain review.",
+            "anomaly_candidates",
+            rows=[],
+            evidence=[],
+            limitations=["An empty validated result must not be interpreted as evidence that no anomaly exists."],
+            confidence=1.0,
+            sql=str(statement.compile(compile_kwargs={"literal_binds": False})),
+        )
+    by_detector: dict[str, int] = {}
+    for row in rows:
+        detector = str(row["detector_type"])
+        by_detector[detector] = by_detector.get(detector, 0) + int(row["candidate_count"])
+    breakdown = ", ".join(f"{key}: {value}" for key, value in sorted(by_detector.items()))
+    return ChatAnswer(
+        f"Automated anomaly candidates by detector are {breakdown}. These records are candidates, not confirmed incidents.",
+        "anomaly_candidates",
+        rows=rows,
+        evidence=rows,
+        limitations=[
+            "Rule, data-quality, and ML signals use different evidence and must be reviewed separately.",
+            "Unreviewed candidates are not domain-validated facts or engineering recommendations.",
+        ],
+        confidence=1.0,
+        sql=str(statement.compile(compile_kwargs={"literal_binds": False})),
+        export_filename="anomaly-candidate-breakdown.csv",
+    )
 def _equipment_failures(session: Session, plan: QueryPlan) -> ChatAnswer:
     statement = (
         select(EquipmentFailure, FailureOperationMatch, Operation, Report, SourceDocument)
@@ -466,6 +523,7 @@ HANDLER_REGISTRY: dict[str, IntentHandler] = {
     "count_aggregation": _activity_aggregation,
     "compare_wellbores": _activity_aggregation,
     "activity_analysis": _main_activity,
+    "anomaly_candidates": _anomaly_candidates,
     "equipment_failures": _equipment_failures,
     "plot_facts": _plot_facts,
     "plot_trends": _plot_trend,

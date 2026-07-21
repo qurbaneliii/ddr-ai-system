@@ -4,6 +4,7 @@ import io
 import json
 import math
 from collections import Counter
+from datetime import date
 from typing import Any
 
 from PIL import Image, UnidentifiedImageError
@@ -26,6 +27,7 @@ def _load_candidate_bytes(
     plot: Plot,
     selection: str,
 ) -> bytes:
+    stored_path: str | None
     if selection == "source":
         persisted = load_persisted_asset(session, document.id)
         if persisted is not None:
@@ -103,18 +105,21 @@ def load_plot_image_context(
     bands = Counter(
         item.band_classification for item in points if item.band_classification is not None
     )
-    dated = [item for item in points if item.observed_date and item.y_value is not None]
-    dated.sort(key=lambda item: item.observed_date)
+    dated: list[tuple[date, float]] = []
+    for item in points:
+        if item.observed_date is not None and item.y_value is not None:
+            dated.append((item.observed_date, float(item.y_value)))
+    dated.sort(key=lambda item: item[0])
     trend: dict[str, Any] = {
         "series": sorted({item.series_identifier for item in points}),
     }
     if dated:
         first, last = dated[0], dated[-1]
-        delta = float(last.y_value or 0) - float(first.y_value or 0)
+        delta = last[1] - first[1]
         trend.update(
             {
-                "date_start": first.observed_date.isoformat(),
-                "date_end": last.observed_date.isoformat(),
+                "date_start": first[0].isoformat(),
+                "date_end": last[0].isoformat(),
                 "stored_value_direction": "increasing"
                 if delta > 0
                 else "decreasing"

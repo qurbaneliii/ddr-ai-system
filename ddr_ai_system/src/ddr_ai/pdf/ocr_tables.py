@@ -83,7 +83,7 @@ def _starts(header: list[OCRToken], kind: str) -> list[float]:
             _token_x(header, ("state",)),
             _token_x(header, ("remark",)),
         ]
-        fractions = (0.0, 0.11, 0.22, 0.38, 0.72, 0.82)
+        fractions: tuple[float, ...] = (0.0, 0.11, 0.22, 0.38, 0.72, 0.82)
     else:
         values = [
             _token_x(header, ("start",)),
@@ -166,7 +166,7 @@ def reconstruct_ddr_tables(
     )
     if failure_index is not None:
         starts = _starts(rows[failure_index], "failure")
-        headers = [
+        headers: list[str | None] = [
             "Start time",
             "Depth mMD",
             "Depth mTVD",

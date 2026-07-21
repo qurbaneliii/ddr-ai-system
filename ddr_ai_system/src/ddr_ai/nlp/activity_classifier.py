@@ -46,7 +46,8 @@ class ActivityPrediction:
 
 
 class ActivityPredictor(Protocol):
-    model_version: str
+    @property
+    def model_version(self) -> str: ...
 
     def predict(self, kind: LabelKind, remark: str) -> ActivityPrediction: ...
 

@@ -2,14 +2,23 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from PIL import Image
 from pypdf import PdfWriter
+from pypdf.errors import PdfStreamError
 from sqlalchemy import select
 
 from ddr_ai.config import Settings
 from ddr_ai.db.models import Page
 from ddr_ai.db.session import session_scope, upgrade_schema
-from ddr_ai.pdf.ocr import BaseOCRBackend, OCRResult, OCRToken, parse_scanned_pdf
+from ddr_ai.pdf.ocr import (
+    BaseOCRBackend,
+    OCRResult,
+    OCRToken,
+    OCRUnavailableError,
+    TesseractOCRBackend,
+    parse_scanned_pdf,
+)
 from ddr_ai.pdf.ocr_tables import reconstruct_ddr_tables
 from ddr_ai.services.processor import process_file
 
@@ -127,3 +136,61 @@ def test_ocr_operation_table_reconstruction_uses_layout_tokens() -> None:
     assert operation.duration_hours == 4.0
     assert operation.bbox is not None
     assert operation.raw_values["extraction_method"] == "ocr_layout"
+
+
+class EmptyOCRBackend(BaseOCRBackend):
+    name = "empty-test-ocr"
+
+    def recognize(self, image: Image.Image) -> OCRResult:
+        assert image.width > 0
+        return OCRResult(text="", confidence=0.0)
+
+
+class FailedOCRBackend(BaseOCRBackend):
+    name = "failed-test-ocr"
+
+    def recognize(self, image: Image.Image) -> OCRResult:
+        del image
+        raise OCRUnavailableError("test-safe OCR failure")
+
+
+def test_empty_low_confidence_and_landscape_ocr_are_bounded(tmp_path: Path) -> None:
+    path = tmp_path / "landscape.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=842, height=595)
+    with path.open("wb") as stream:
+        writer.write(stream)
+
+    report = parse_scanned_pdf(path, backend=EmptyOCRBackend(), dpi=72)
+
+    assert report.pages[0].width == 842
+    assert report.pages[0].height == 595
+    assert report.pages[0].confidence == 0.0
+    assert report.operations == []
+    assert any(item["code"] == "ocr_extraction_requires_review" for item in report.warnings)
+
+
+def test_ocr_backend_failure_and_missing_tesseract_are_explicit(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "scan.pdf"
+    _blank_pdf(path)
+    with pytest.raises(OCRUnavailableError, match="test-safe"):
+        parse_scanned_pdf(path, backend=FailedOCRBackend(), dpi=72)
+
+    import pytesseract
+
+    def missing() -> None:
+        raise pytesseract.TesseractNotFoundError()
+
+    monkeypatch.setattr(pytesseract, "get_tesseract_version", missing)
+    with pytest.raises(OCRUnavailableError, match="not installed"):
+        TesseractOCRBackend()
+
+
+def test_malformed_pdf_is_rejected(tmp_path: Path) -> None:
+    path = tmp_path / "malformed.pdf"
+    path.write_bytes(b"not a PDF")
+    with pytest.raises(PdfStreamError):
+        parse_scanned_pdf(path, backend=EmptyOCRBackend(), dpi=72)

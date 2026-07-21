@@ -77,6 +77,7 @@ no_implicit_optional = true
 [[tool.mypy.overrides]]
 module = [
   "fitz",
+  "joblib",
   "pandas",
   "plotly.*",
   "pytesseract",
